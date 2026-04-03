@@ -10,7 +10,7 @@ st.title("行业拥挤度分析 (近20天滚动)")
 
 # -----------------------------
 # 2️⃣ 读取 Excel
-file_path = r"E:\MoneyFactory\yongjidu.xlsx"
+file_path = "yongjidu.xlsx"
 df = pd.read_excel(file_path, sheet_name="data")
 
 # 假设第一列是日期
