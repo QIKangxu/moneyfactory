@@ -1,59 +1,691 @@
-# 文件名: app.py
 import pandas as pd
 import streamlit as st
-import plotly.express as px
+import plotly.graph_objects as go
+from sklearn.preprocessing import MinMaxScaler
 
-# -----------------------------
-# 1️⃣ 页面标题
-st.set_page_config(page_title="行业拥挤度分析", layout="wide")
-st.title("行业拥挤度分析 (近20天滚动)")
-
-# -----------------------------
-# 2️⃣ 读取 Excel
-file_path = "yongjidu.xlsx"
-df = pd.read_excel(file_path, sheet_name="data")
-
-# 假设第一列是日期
-df.rename(columns={df.columns[0]: "日期"}, inplace=True)
-df.set_index("日期", inplace=True)
-
-# 列名处理
-Ashare_col = "成交额-万得全A"
-industry_cols = [col for col in df.columns if col.startswith("成交额-")]
-
-# -----------------------------
-# 3️⃣ 计算拥挤度
-window = 20
-Ashare_rolling = df[Ashare_col].rolling(window).sum()
-
-crowding = pd.DataFrame(index=df.index[window-1:])
-for col in industry_cols:
-    if col == Ashare_col:
-        continue
-    crowding[col] = df[col].rolling(window).sum() / Ashare_rolling
-
-# -----------------------------
-# 4️⃣ 网页侧边栏选择行业
-selected_industry = st.sidebar.selectbox(
-    "请选择行业查看拥挤度",
-    options=[col for col in crowding.columns]
+# =============================
+# 页面配置（必须放最前面）
+# =============================
+st.set_page_config(
+    page_title="工厂 | 行业分析系统",
+    page_icon="🏭",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# -----------------------------
-# 5️⃣ 表格 + 折线图左右并排显示
-col1, col2 = st.columns(2)
+# =============================
+# 自定义CSS样式
+# =============================
+st.markdown("""
+<style>
+    /* 全局字体和颜色 */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-with col1:
-    st.subheader(f"{selected_industry} 拥挤度表格（最近20行）")
-    st.dataframe(crowding[selected_industry].tail(20))
+    html, body, [class*="css"] {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
 
-with col2:
-    st.subheader(f"{selected_industry} 拥挤度折线图")
-    fig = px.line(
-        crowding,
-        x=crowding.index,
-        y=selected_industry,
-        title=f"{selected_industry} 拥挤度折线图（近20天滚动）",
-        labels={selected_industry: "拥挤度", "index": "日期"}
+    /* 主标题样式 */
+    .main-title {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 700;
+        font-size: 2.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    /* 副标题样式 */
+    .subtitle {
+        color: #6b7280;
+        font-size: 1rem;
+        font-weight: 400;
+        margin-bottom: 2rem;
+    }
+
+    /* 卡片容器样式 */
+    .chart-card {
+        background: white;
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        border: 1px solid #e5e7eb;
+        margin-bottom: 20px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .chart-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    }
+
+    /* 行业名称标签 */
+    .industry-label {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 0.9rem;
+        display: inline-block;
+        margin-bottom: 15px;
+    }
+
+    /* 图例说明样式 */
+    .legend-box {
+        background: #f9fafb;
+        border-radius: 12px;
+        padding: 16px 20px;
+        margin-bottom: 24px;
+        border-left: 4px solid #667eea;
+    }
+
+    /* 选择框样式优化 */
+    .stMultiSelect [data-baseweb="select"] {
+        border-radius: 10px;
+    }
+
+    /* 按钮样式 */
+    .stButton > button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        padding: 10px 24px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    /* 侧边栏样式 */
+    .css-1d391kg {
+        background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+    }
+
+    /* 分隔线样式 */
+    hr {
+        border: none;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, #e5e7eb, transparent);
+        margin: 2rem 0;
+    }
+
+    /* 加载动画 */
+    .stSpinner > div {
+        border-top-color: #667eea !important;
+    }
+
+    /* 信息提示框 */
+    .info-box {
+        background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+        border: 1px solid #667eea30;
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+    }
+
+    /* 欢迎页面样式 */
+    .welcome-container {
+        text-align: center;
+        padding: 60px 20px;
+    }
+
+    .welcome-icon {
+        font-size: 4rem;
+        margin-bottom: 20px;
+    }
+
+    /* 参数标签样式 */
+    .param-tag {
+        background: #f3f4f6;
+        color: #6b7280;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# =============================
+# 初始化 session_state
+# =============================
+if "page" not in st.session_state:
+    st.session_state.page = "请选择"
+if "selected_industries" not in st.session_state:
+    st.session_state.selected_industries = []
+
+
+# =============================
+# 数据加载函数
+# =============================
+@st.cache_data
+def load_data(file_path):
+    """加载并缓存数据"""
+    df = pd.read_excel(file_path, sheet_name="data", header=[0, 1, 2, 3])
+
+    # 展平多级列名：代码_指标_分类_名称
+    new_columns = []
+    for col in df.columns:
+        if col[0] == '日期' or str(col[0]).startswith('Unnamed'):
+            new_columns.append('日期')
+        else:
+            new_col = f"{col[0]}_{col[1]}_{col[2]}_{col[3]}"
+            new_columns.append(new_col)
+
+    df.columns = new_columns
+
+    # 处理日期列
+    df = df.loc[:, ~df.columns.duplicated()]
+    df.rename(columns={df.columns[0]: "日期"}, inplace=True)
+    df["日期"] = pd.to_datetime(df["日期"])
+    df.set_index("日期", inplace=True)
+
+    latest_date = df.index.max()
+    latest_date_str = latest_date.strftime("%Y年%m月%d日")
+
+    return df, latest_date_str
+
+
+# =============================
+# 核心计算函数
+# =============================
+def identify_columns_by_category(df, category_filter=None):
+    """按分类识别列（category_filter: '一级行业' 或 '细分行业' 等）"""
+    all_cols = df.columns.tolist()
+
+    # 识别波动率列
+    all_vol_cols = [col for col in all_cols if '_波动率_' in col]
+
+    # 按分类筛选
+    filtered_vol_cols = []
+    filtered_industries = []
+
+    for col in all_vol_cols:
+        parts = col.split('_')
+        if len(parts) >= 4:
+            category = parts[2]  # 第3部分是分类（大盘/一级行业/细分行业）
+            industry_name = parts[3]  # 第4部分是行业名
+
+            # 如果指定了分类过滤，只保留匹配的
+            if category_filter is None or category == category_filter:
+                filtered_vol_cols.append(col)
+                filtered_industries.append(industry_name)
+
+    # 找万得全A作为基准（从大盘分类中找）
+    Ashare_vol_col = None
+    Ashare_name = None
+    for col in all_vol_cols:
+        parts = col.split('_')
+        if len(parts) >= 4 and parts[3] == '万得全A':
+            Ashare_vol_col = col
+            Ashare_name = '万得全A'
+            break
+
+    # 如果没找到，取第一个波动率列作为基准
+    if Ashare_vol_col is None and len(all_vol_cols) > 0:
+        Ashare_vol_col = all_vol_cols[0]
+        Ashare_name = all_vol_cols[0].split('_')[-1]
+
+    # 行业列表（排除万得全A）
+    industry_names = [name for name in filtered_industries if name != Ashare_name]
+
+    # 构建列名字典
+    amt_dict, ret_dict, vol_dict = {}, {}, {}
+    for name in industry_names:
+        amt_dict[name] = next((col for col in all_cols if f'_成交额_' in col and col.endswith(f'_{name}')), None)
+        ret_dict[name] = next((col for col in all_cols if f'_收益率_' in col and col.endswith(f'_{name}')), None)
+        vol_dict[name] = next((col for col in filtered_vol_cols if col.endswith(f'_{name}')), None)
+
+    # 万得全A的列（从所有列中找）
+    Ashare_amt_col = next((col for col in all_cols if f'_成交额_' in col and '万得全A' in col), None)
+    Ashare_ret_col = next((col for col in all_cols if f'_收益率_' in col and '万得全A' in col), None)
+
+    return {
+        "industry_names": industry_names,
+        "Ashare_amt_col": Ashare_amt_col,
+        "Ashare_ret_col": Ashare_ret_col,
+        "amt_dict": amt_dict,
+        "ret_dict": ret_dict,
+        "vol_dict": vol_dict
+    }
+
+
+def calculate_indicators(df, col_info, window_crowd=20, window_ret=55):
+    """计算指标"""
+    industry_names = col_info["industry_names"]
+    Ashare_amt_col = col_info["Ashare_amt_col"]
+    Ashare_ret_col = col_info["Ashare_ret_col"]
+    amt_dict = col_info["amt_dict"]
+    ret_dict = col_info["ret_dict"]
+    vol_dict = col_info["vol_dict"]
+
+    # 检查必要的列是否存在
+    if Ashare_amt_col is None or Ashare_amt_col not in df.columns:
+        raise ValueError(f"万得全A成交额列未找到")
+    if Ashare_ret_col is None or Ashare_ret_col not in df.columns:
+        raise ValueError(f"万得全A收益率列未找到")
+
+    # 拥挤度
+    Ashare_rolling = df[Ashare_amt_col].rolling(window_crowd).sum()
+    crowding = pd.DataFrame(index=df.index[window_crowd - 1:])
+
+    for name in industry_names:
+        amt_col = amt_dict.get(name)
+        if amt_col and amt_col in df.columns:
+            crowding[name] = df[amt_col].rolling(window_crowd).sum() / Ashare_rolling
+        else:
+            crowding[name] = 0
+
+    # 超额收益
+    relative_returns = pd.DataFrame(index=df.index)
+    for name in industry_names:
+        ret_col = ret_dict.get(name)
+        if ret_col and ret_col in df.columns:
+            relative_returns[name] = df[ret_col] - df[Ashare_ret_col]
+        else:
+            relative_returns[name] = 0
+    relative_returns_sum = relative_returns.rolling(window_ret).sum()
+
+    # 波动率
+    volatility = pd.DataFrame(index=crowding.index)
+    for name in industry_names:
+        vol_col = vol_dict.get(name)
+        if vol_col and vol_col in df.columns:
+            volatility[name] = df[vol_col].iloc[window_crowd - 1:]
+        else:
+            volatility[name] = 0
+
+    return crowding, relative_returns_sum, volatility
+
+
+def standardize_data(crowding, volatility, relative_returns_sum, industry_names,
+                     window_crowd=20, window_ret=55):
+    """标准化数据"""
+    scaled_data = {}
+    max_window = max(window_crowd, window_ret)
+
+    for name in industry_names:
+        tmp = pd.DataFrame({
+            "拥挤度": crowding[name],
+            "超额收益": relative_returns_sum[name].iloc[window_crowd - 1:],
+            "波动率": volatility[name]
+        })
+
+        tmp_valid = tmp.iloc[max_window - 1:]
+        tmp_valid = tmp_valid.replace([float('inf'), -float('inf')], pd.NA).dropna()
+        if tmp_valid.empty:
+            continue
+
+        result = pd.DataFrame(index=tmp_valid.index)
+        scaler = MinMaxScaler()
+        result["拥挤度"] = scaler.fit_transform(tmp_valid[["拥挤度"]])
+        result["波动率"] = scaler.fit_transform(tmp_valid[["波动率"]])
+        result["超额收益"] = tmp_valid["超额收益"]
+        scaled_data[name] = result
+
+    return scaled_data
+
+
+def create_chart(name, data, params_label, height=320):
+    """创建图表（美化版）"""
+    fig = go.Figure()
+
+    # 使用更现代的配色
+    colors = {
+        '拥挤度': '#6366f1',  # 靛蓝
+        '波动率': '#10b981',  # 翠绿
+        '超额收益': '#f43f5e'  # 玫瑰红
+    }
+
+    fig.add_trace(go.Scatter(
+        x=data.index, y=data["拥挤度"], mode='lines',
+        name='拥挤度', line=dict(color=colors['拥挤度'], width=2.5),
+        yaxis='y', showlegend=True,
+        hovertemplate='%{x|%Y-%m-%d}<br>拥挤度: %{y:.2%}<extra></extra>'
+    ))
+    fig.add_trace(go.Scatter(
+        x=data.index, y=data["波动率"], mode='lines',
+        name='波动率', line=dict(color=colors['波动率'], width=2.5),
+        yaxis='y', showlegend=True,
+        hovertemplate='%{x|%Y-%m-%d}<br>波动率: %{y:.2%}<extra></extra>'
+    ))
+    fig.add_trace(go.Scatter(
+        x=data.index, y=data["超额收益"], mode='lines',
+        name='超额收益', line=dict(color=colors['超额收益'], width=2.5),
+        yaxis='y2', showlegend=True,
+        hovertemplate='%{x|%Y-%m-%d}<br>超额收益: %{y:.2%}<extra></extra>'
+    ))
+
+    fig.update_layout(
+        title=dict(
+            text=f"<b>{name}</b>",
+            font=dict(size=16, color='#1f2937'),
+            x=0.5, xanchor='center',
+            y=0.98, yanchor='top'
+        ),
+        # 参数标签放左边
+        annotations=[dict(
+            text=f"<span style='color:#6b7280;font-size:11px;'>{params_label}</span>",
+            xref='paper', yref='paper',
+            x=0, y=1.12,
+            xanchor='left', yanchor='top',
+            showarrow=False
+        )],
+        xaxis=dict(
+            showline=True, linecolor='#e5e7eb', linewidth=1,
+            tickfont=dict(color='#6b7280', size=10),
+            zeroline=False, showgrid=True, gridcolor='#f3f4f6',
+            tickformat='%Y-%m'
+        ),
+        yaxis=dict(
+            side='left', range=[0, 1], tickmode='array', tickvals=[0, 0.5, 1],
+            ticktext=['0%', '50%', '100%'], tickfont=dict(color='#6b7280', size=10),
+            showgrid=True, gridcolor='#f3f4f6',
+            showline=True, linecolor='#e5e7eb', linewidth=1, zeroline=False,
+            title=dict(text='拥挤度/波动率', font=dict(size=10, color='#9ca3af'))
+        ),
+        yaxis2=dict(
+            overlaying='y', side='right', tickformat='.0%',
+            tickfont=dict(color='#6b7280', size=10),
+            showline=True, linecolor='#e5e7eb', linewidth=1,
+            showgrid=False, zeroline=False,
+            title=dict(text='超额收益', font=dict(size=10, color='#9ca3af'))
+        ),
+        # 图例放右边，无边框
+        legend=dict(
+            orientation='h',
+            yanchor='top', y=1.12,
+            xanchor='right', x=1,
+            bgcolor='rgba(0,0,0,0)',  # 透明背景
+            borderwidth=0,  # 无边框
+            font=dict(size=10),
+            itemsizing='constant'
+        ),
+        margin=dict(l=60, r=60, t=80, b=40),
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        height=height,
+        hovermode='x unified'
     )
-    st.plotly_chart(fig, width="stretch")
+    return fig
+
+# =============================
+# 页面渲染函数
+# =============================
+
+def render_sidebar():
+    """渲染侧边栏导航"""
+    st.sidebar.title("🏭 工厂")
+
+    # 一级菜单：拥挤度
+    with st.sidebar.expander("🔥 拥挤度", expanded=False):
+        if st.button("📊 一级行业概览", key="nav_一级行业概览", use_container_width=True):
+            st.session_state.page = "拥挤度_一级行业概览"
+        if st.button("🔍 细分行业筛选", key="nav_细分行业筛选", use_container_width=True):
+            st.session_state.page = "拥挤度_细分行业筛选"
+
+    # 预留其他一级菜单位置
+    with st.sidebar.expander("📈 景气度", expanded=False):
+        st.button("行业景气度", disabled=True, use_container_width=True)
+        st.button("个股景气度", disabled=True, use_container_width=True)
+
+    with st.sidebar.expander("💰 资金流向", expanded=False):
+        st.button("北向资金", disabled=True, use_container_width=True)
+        st.button("主力资金", disabled=True, use_container_width=True)
+
+    # 底部信息
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("""
+        <div style='text-align:center;color:#9ca3af;font-size:0.75rem;'>
+            系统版本 v1.2<br>
+            © 2026 工厂
+        </div>
+    """, unsafe_allow_html=True)
+
+
+def render_请选择():
+    """初始欢迎界面（美化版）"""
+    st.markdown("""
+        <div class="welcome-container">
+            <div class="welcome-icon">🏭</div>
+            <h1 class="main-title">欢迎使用工厂</h1>
+            <p class="subtitle">智能行业分析系统</p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # 功能卡片
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown("""
+            <div style='background:white;padding:24px;border-radius:16px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);text-align:center;'>
+                <div style='font-size:2.5rem;margin-bottom:12px;'>🔥</div>
+                <h3 style='color:#1f2937;margin-bottom:8px;'>拥挤度分析</h3>
+                <p style='color:#6b7280;font-size:0.875rem;'>一级行业概览与细分行业筛选</p>
+            </div>
+        """, unsafe_allow_html=True)
+        if st.button("进入拥挤度", key="welcome_拥挤度", use_container_width=True):
+            st.session_state.page = "拥挤度_一级行业概览"
+            st.rerun()
+
+    with col2:
+        st.markdown("""
+            <div style='background:white;padding:24px;border-radius:16px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);text-align:center;opacity:0.6;'>
+                <div style='font-size:2.5rem;margin-bottom:12px;'>📈</div>
+                <h3 style='color:#1f2937;margin-bottom:8px;'>景气度分析</h3>
+                <p style='color:#6b7280;font-size:0.875rem;'>即将上线</p>
+            </div>
+        """, unsafe_allow_html=True)
+        st.button("敬请期待", key="welcome_景气度", disabled=True, use_container_width=True)  # 添加 key
+
+    with col3:
+        st.markdown("""
+            <div style='background:white;padding:24px;border-radius:16px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);text-align:center;opacity:0.6;'>
+                <div style='font-size:2.5rem;margin-bottom:12px;'>💰</div>
+                <h3 style='color:#1f2937;margin-bottom:8px;'>资金流向</h3>
+                <p style='color:#6b7280;font-size:0.875rem;'>即将上线</p>
+            </div>
+        """, unsafe_allow_html=True)
+        st.button("敬请期待", key="welcome_资金流向", disabled=True, use_container_width=True)  # 添加 key
+
+
+def render_一级行业概览(df, latest_date_str):
+    """渲染一级行业概览页面（美化版）"""
+    st.markdown(f'<h1 class="main-title">拥挤度 - 一级行业概览</h1>', unsafe_allow_html=True)
+    st.markdown(f'<p class="subtitle">数据截至 {latest_date_str}</p>', unsafe_allow_html=True)
+
+    # 图例说明卡片
+    st.markdown("""
+        <div class="legend-box">
+            <span style='font-weight:600;color:#374151;'>图例说明：</span>
+            <span style='color:#6366f1;font-weight:500;'>● 拥挤度</span>（标准化）
+            <span style='margin:0 8px;color:#d1d5db;'>|</span>
+            <span style='color:#10b981;font-weight:500;'>● 波动率</span>（标准化）
+            <span style='margin:0 8px;color:#d1d5db;'>|</span>
+            <span style='color:#f43f5e;font-weight:500;'>● 超额收益</span>（右轴，绝对值）
+        </div>
+    """, unsafe_allow_html=True)
+
+    # 只获取一级行业的数据
+    with st.spinner("正在计算指标..."):
+        col_info = identify_columns_by_category(df, category_filter="一级行业")
+
+        if len(col_info["industry_names"]) == 0:
+            st.error("未找到一级行业数据，请检查数据源")
+            return
+
+        # 配置1: 15, 15
+        c15, r15, v15 = calculate_indicators(df, col_info, 15, 15)
+        data_15 = standardize_data(c15, v15, r15, col_info["industry_names"], 15, 15)
+
+        # 配置2: 20, 55
+        c20, r20, v20 = calculate_indicators(df, col_info, 20, 55)
+        data_20 = standardize_data(c20, v20, r20, col_info["industry_names"], 20, 55)
+
+    # 统计信息
+    total_count = len([n for n in col_info["industry_names"] if n in data_15 and n in data_20])
+    st.markdown(f"<p style='color:#6b7280;margin-bottom:20px;'>共 <b>{total_count}</b> 个一级行业</p>",
+                unsafe_allow_html=True)
+
+    # 展示对比图表
+    for name in col_info["industry_names"]:
+        if name not in data_15 or name not in data_20:
+            continue
+
+        # 使用卡片容器
+        st.markdown(f"""
+            <div class="chart-card">
+                <span class="industry-label">{name}</span>
+            </div>
+        """, unsafe_allow_html=True)
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            fig_15 = create_chart(name, data_15[name], "拥挤度15天 | 超额收益15天")
+            st.plotly_chart(fig_15, use_container_width=True, key=f"{name}_15")
+
+        with col2:
+            fig_20 = create_chart(name, data_20[name], "拥挤度20天 | 超额收益55天")
+            st.plotly_chart(fig_20, use_container_width=True, key=f"{name}_20")
+
+        st.markdown("<hr>", unsafe_allow_html=True)
+
+
+def render_细分行业筛选(df, latest_date_str):
+    """渲染细分行业筛选页面（美化版）"""
+    st.markdown(f'<h1 class="main-title">拥挤度 - 细分行业筛选</h1>', unsafe_allow_html=True)
+    st.markdown(f'<p class="subtitle">数据截至 {latest_date_str}</p>', unsafe_allow_html=True)
+
+    # 获取所有细分行业列表
+    col_info_all = identify_columns_by_category(df, category_filter="细分行业")
+    industry_options = col_info_all["industry_names"]
+
+    if len(industry_options) == 0:
+        st.error("未找到细分行业数据，请检查数据源")
+        return
+
+    # 统计信息
+    st.markdown(f"<p style='color:#6b7280;margin-bottom:16px;'>可选 <b>{len(industry_options)}</b> 个细分行业</p>",
+                unsafe_allow_html=True)
+
+    # 行业选择区域（无默认值）
+    selected = st.multiselect(
+        "🔍 选择要分析的细分行业（支持多选）",
+        options=industry_options,
+        default=[],
+        placeholder="请选择行业..."
+    )
+
+    if not selected:
+        st.markdown("""
+            <div class="info-box">
+                <div style='font-size:2rem;margin-bottom:12px;'>👆</div>
+                <p style='color:#6b7280;'>请从上方选择至少一个细分行业进行分析</p>
+            </div>
+        """, unsafe_allow_html=True)
+        return
+
+    # 图例说明
+    st.markdown("""
+        <div class="legend-box">
+            <span style='font-weight:600;color:#374151;'>图例说明：</span>
+            <span style='color:#6366f1;font-weight:500;'>● 拥挤度</span>（标准化）
+            <span style='margin:0 8px;color:#d1d5db;'>|</span>
+            <span style='color:#10b981;font-weight:500;'>● 波动率</span>（标准化）
+            <span style='margin:0 8px;color:#d1d5db;'>|</span>
+            <span style='color:#f43f5e;font-weight:500;'>● 超额收益</span>（右轴，绝对值）
+        </div>
+    """, unsafe_allow_html=True)
+
+    # 直接计算并展示两种配置
+    with st.spinner(f"正在计算 {len(selected)} 个行业的指标..."):
+        col_info = {
+            "industry_names": selected,
+            "Ashare_amt_col": col_info_all["Ashare_amt_col"],
+            "Ashare_ret_col": col_info_all["Ashare_ret_col"],
+            "amt_dict": {k: v for k, v in col_info_all["amt_dict"].items() if k in selected},
+            "ret_dict": {k: v for k, v in col_info_all["ret_dict"].items() if k in selected},
+            "vol_dict": {k: v for k, v in col_info_all["vol_dict"].items() if k in selected},
+        }
+
+        try:
+            c15, r15, v15 = calculate_indicators(df, col_info, 15, 15)
+            data_15 = standardize_data(c15, v15, r15, selected, 15, 15)
+
+            c20, r20, v20 = calculate_indicators(df, col_info, 20, 55)
+            data_20 = standardize_data(c20, v20, r20, selected, 20, 55)
+
+        except Exception as e:
+            st.error(f"计算出错: {e}")
+            return
+
+    # 展示对比图表
+    for name in selected:
+        if name not in data_15 or name not in data_20:
+            st.warning(f"{name}: 数据不足，无法计算")
+            continue
+
+        st.markdown(f"""
+            <div class="chart-card">
+                <span class="industry-label">{name}</span>
+            </div>
+        """, unsafe_allow_html=True)
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            fig_15 = create_chart(name, data_15[name], "拥挤度15天 | 超额收益15天")
+            st.plotly_chart(fig_15, use_container_width=True, key=f"细分_{name}_15")
+
+        with col2:
+            fig_20 = create_chart(name, data_20[name], "拥挤度20天 | 超额收益55天")
+            st.plotly_chart(fig_20, use_container_width=True, key=f"细分_{name}_20")
+
+        st.markdown("<hr>", unsafe_allow_html=True)
+
+
+# =============================
+# 主程序入口
+# =============================
+
+def main():
+    # 渲染侧边栏
+    render_sidebar()
+
+    # 加载数据
+    file_path = r"C:\Users\xucla\Desktop\data.xlsx"
+
+    try:
+        df, latest_date_str = load_data(file_path)
+    except Exception as e:
+        st.error(f"数据加载失败: {e}")
+        import traceback
+        st.error(traceback.format_exc())
+        return
+
+    # 根据当前页面路由渲染内容
+    current_page = st.session_state.page
+
+    if current_page == "请选择":
+        render_请选择()
+
+    elif current_page == "拥挤度_一级行业概览":
+        render_一级行业概览(df, latest_date_str)
+
+    elif current_page == "拥挤度_细分行业筛选":
+        render_细分行业筛选(df, latest_date_str)
+
+    else:
+        st.error("未知页面")
+
+
+if __name__ == "__main__":
+    main()
