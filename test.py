@@ -656,7 +656,7 @@ def main():
     if 'is_mobile' not in st.session_state:
         st.session_state.is_mobile = True
     
-    file_path = r"C:\Users\xucla\Desktop\data.xlsx"
+    file_path = "data.xlsx"
     
     try:
         df, latest_date_str = load_data(file_path)
