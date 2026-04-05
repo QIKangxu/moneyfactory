@@ -14,47 +14,46 @@ st.set_page_config(
 )
 
 # =============================
-# 自定义CSS样式
+# 自定义CSS样式（添加移动端适配）
 # =============================
 st.markdown("""
 <style>
+    /* 全局字体和颜色 */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    
+
     html, body, [class*="css"] {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
-    
+
+    /* 主标题样式 */
     .main-title {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         font-weight: 700;
-        font-size: 1.8rem;
+        font-size: 2rem;
         margin-bottom: 0.5rem;
     }
-    
+
+    /* 副标题样式 */
     .subtitle {
         color: #6b7280;
         font-size: 0.9rem;
         font-weight: 400;
         margin-bottom: 1.5rem;
     }
-    
-    .chart-container {
+
+    /* 卡片容器样式 */
+    .chart-card {
         background: white;
         border-radius: 12px;
         padding: 16px;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         border: 1px solid #e5e7eb;
         margin-bottom: 16px;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
     }
-    
-    .chart-inner {
-        min-width: 700px;
-    }
-    
+
+    /* 行业名称标签 */
     .industry-label {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
@@ -65,7 +64,8 @@ st.markdown("""
         display: inline-block;
         margin-bottom: 12px;
     }
-    
+
+    /* 图例说明样式 */
     .legend-box {
         background: #f9fafb;
         border-radius: 10px;
@@ -74,7 +74,13 @@ st.markdown("""
         border-left: 4px solid #667eea;
         font-size: 0.85rem;
     }
-    
+
+    /* 选择框样式优化 */
+    .stMultiSelect [data-baseweb="select"] {
+        border-radius: 10px;
+    }
+
+    /* 按钮样式 */
     .stButton > button {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
@@ -82,8 +88,28 @@ st.markdown("""
         border-radius: 10px;
         padding: 10px 24px;
         font-weight: 500;
+        transition: all 0.3s ease;
     }
-    
+
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    /* 侧边栏样式 */
+    .css-1d391kg {
+        background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+    }
+
+    /* 分隔线样式 */
+    hr {
+        border: none;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, #e5e7eb, transparent);
+        margin: 1.5rem 0;
+    }
+
+    /* 信息提示框 */
     .info-box {
         background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
         border: 1px solid #667eea30;
@@ -91,23 +117,37 @@ st.markdown("""
         padding: 20px;
         text-align: center;
     }
-    
+
+    /* 欢迎页面样式 */
     .welcome-container {
         text-align: center;
         padding: 40px 20px;
     }
-    
+
     .welcome-icon {
         font-size: 3rem;
         margin-bottom: 16px;
     }
-    
+
+    /* 移动端适配 */
     @media (max-width: 768px) {
-        .main-title { font-size: 1.4rem; }
-        .subtitle { font-size: 0.8rem; }
-        .chart-container { padding: 12px; }
-        .chart-inner { min-width: 600px; }
-        .industry-label { font-size: 0.8rem; padding: 4px 10px; }
+        .main-title {
+            font-size: 1.5rem;
+        }
+        .subtitle {
+            font-size: 0.8rem;
+        }
+        .chart-card {
+            padding: 12px;
+        }
+        .industry-label {
+            font-size: 0.8rem;
+            padding: 4px 10px;
+        }
+        .legend-box {
+            font-size: 0.75rem;
+            padding: 10px 12px;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -156,7 +196,7 @@ def identify_columns_by_category(df, category_filter=None):
     """按分类识别列"""
     all_cols = df.columns.tolist()
     all_vol_cols = [col for col in all_cols if '_波动率_' in col]
-    
+
     filtered_vol_cols = []
     filtered_industries = []
 
@@ -275,117 +315,92 @@ def standardize_data(crowding, volatility, relative_returns_sum, industry_names,
     return scaled_data
 
 
-def create_chart(name, data, params_label, is_mobile=False):
-    """创建图表（保持比例，趋势清晰）"""
+def create_chart(name, data, params_label, height=380, is_mobile=False):
+    """创建图表（支持移动端适配）"""
     fig = go.Figure()
-    
+
     colors = {
         '拥挤度': '#6366f1',
         '波动率': '#10b981',
         '超额收益': '#f43f5e'
     }
-    
-    font_size = 10 if is_mobile else 12
-    line_width = 2.5 if is_mobile else 2
-    chart_width = 750 if is_mobile else None
-    chart_height = 320 if is_mobile else 380
-    
+
+    # 移动端调整字体大小
+    font_size = 9 if is_mobile else 10
+    title_size = 14 if is_mobile else 16
+
     fig.add_trace(go.Scatter(
         x=data.index, y=data["拥挤度"], mode='lines',
-        name='拥挤度', 
-        line=dict(color=colors['拥挤度'], width=line_width),
+        name='拥挤度', line=dict(color=colors['拥挤度'], width=2),
         yaxis='y', showlegend=True,
-        hovertemplate='%{x|%Y-%m-%d}<br>拥挤度: %{y:.1%}<extra></extra>',
-        connectgaps=True
+        hovertemplate='%{x|%Y-%m-%d}<br>拥挤度: %{y:.1%}<extra></extra>'
     ))
     fig.add_trace(go.Scatter(
         x=data.index, y=data["波动率"], mode='lines',
-        name='波动率', 
-        line=dict(color=colors['波动率'], width=line_width),
+        name='波动率', line=dict(color=colors['波动率'], width=2),
         yaxis='y', showlegend=True,
-        hovertemplate='%{x|%Y-%m-%d}<br>波动率: %{y:.1%}<extra></extra>',
-        connectgaps=True
+        hovertemplate='%{x|%Y-%m-%d}<br>波动率: %{y:.1%}<extra></extra>'
     ))
     fig.add_trace(go.Scatter(
         x=data.index, y=data["超额收益"], mode='lines',
-        name='超额收益', 
-        line=dict(color=colors['超额收益'], width=line_width),
+        name='超额收益', line=dict(color=colors['超额收益'], width=2),
         yaxis='y2', showlegend=True,
-        hovertemplate='%{x|%Y-%m-%d}<br>超额收益: %{y:.1%}<extra></extra>',
-        connectgaps=True
+        hovertemplate='%{x|%Y-%m-%d}<br>超额收益: %{y:.1%}<extra></extra>'
     ))
+
+    # 移动端调整边距
+    margin_top = 70 if is_mobile else 80
+    margin_lr = 40 if is_mobile else 60
 
     fig.update_layout(
         title=dict(
             text=f"<b>{name}</b>",
-            font=dict(size=14 if is_mobile else 16, color='#1f2937'),
-            x=0.5, xanchor='center'
+            font=dict(size=title_size, color='#1f2937'),
+            x=0.5, xanchor='center',
+            y=0.98, yanchor='top'
         ),
         annotations=[dict(
             text=f"<span style='color:#6b7280;font-size:{font_size}px;'>{params_label}</span>",
             xref='paper', yref='paper',
-            x=0, y=1.12,
+            x=0, y=1.08 if is_mobile else 1.12,
             xanchor='left', yanchor='top',
             showarrow=False
         )],
         xaxis=dict(
-            showline=True, 
-            linecolor='#e5e7eb', 
-            linewidth=1,
+            showline=True, linecolor='#e5e7eb', linewidth=1,
             tickfont=dict(color='#6b7280', size=font_size),
-            zeroline=False, 
-            showgrid=True, 
-            gridcolor='#f3f4f6',
-            tickformat='%Y-%m',
-            tickangle=-30 if is_mobile else 0,
-            nticks=5 if is_mobile else 8,
-            constrain='domain'
+            zeroline=False, showgrid=True, gridcolor='#f3f4f6',
+            tickformat='%Y-%m' if not is_mobile else '%y-%m'
         ),
         yaxis=dict(
-            side='left', 
-            range=[0, 1], 
-            tickmode='array', 
-            tickvals=[0, 0.5, 1],
-            ticktext=['0%', '50%', '100%'], 
-            tickfont=dict(color='#6b7280', size=font_size),
-            showgrid=True, 
-            gridcolor='#f3f4f6',
-            showline=True, 
-            linecolor='#e5e7eb', 
-            linewidth=1, 
-            zeroline=False,
+            side='left', range=[0, 1], tickmode='array', tickvals=[0, 0.5, 1],
+            ticktext=['0%', '50%', '100%'], tickfont=dict(color='#6b7280', size=font_size),
+            showgrid=True, gridcolor='#f3f4f6',
+            showline=True, linecolor='#e5e7eb', linewidth=1, zeroline=False,
             title=dict(text='拥挤度/波动率', font=dict(size=font_size, color='#9ca3af'))
         ),
         yaxis2=dict(
-            overlaying='y', 
-            side='right', 
-            tickformat='.0%',
+            overlaying='y', side='right', tickformat='.0%',
             tickfont=dict(color='#6b7280', size=font_size),
-            showline=True, 
-            linecolor='#e5e7eb', 
-            linewidth=1,
-            showgrid=False, 
-            zeroline=False,
+            showline=True, linecolor='#e5e7eb', linewidth=1,
+            showgrid=False, zeroline=False,
             title=dict(text='超额收益', font=dict(size=font_size, color='#9ca3af'))
         ),
         legend=dict(
             orientation='h',
-            yanchor='top', y=1.08,
+            yanchor='top', y=1.08 if is_mobile else 1.12,
             xanchor='right', x=1,
             bgcolor='rgba(0,0,0,0)',
             borderwidth=0,
             font=dict(size=font_size),
             itemsizing='constant'
         ),
-        margin=dict(l=50, r=50, t=70, b=50),
+        margin=dict(l=margin_lr, r=margin_lr, t=margin_top, b=40),
         plot_bgcolor='white',
         paper_bgcolor='white',
-        height=chart_height,
-        width=chart_width,
-        hovermode='x unified',
-        autosize=False if is_mobile else True
+        height=height,
+        hovermode='x unified'
     )
-    
     return fig
 
 
@@ -396,7 +411,7 @@ def create_chart(name, data, params_label, is_mobile=False):
 def render_sidebar():
     """渲染侧边栏导航"""
     st.sidebar.title("🏭 工厂")
-    
+
     with st.sidebar.expander("🔥 拥挤度", expanded=False):
         if st.button("📊 一级行业概览", key="nav_一级行业概览", use_container_width=True):
             st.session_state.page = "拥挤度_一级行业概览"
@@ -429,11 +444,11 @@ def render_请选择():
             <p class="subtitle">智能行业分析系统</p>
         </div>
     """, unsafe_allow_html=True)
-    
+
     st.markdown("---")
-    
+
     col1, col2, col3 = st.columns(3)
-    
+
     with col1:
         st.markdown("""
             <div style='background:white;padding:20px;border-radius:16px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);text-align:center;'>
@@ -445,7 +460,7 @@ def render_请选择():
         if st.button("进入拥挤度", key="welcome_拥挤度", use_container_width=True):
             st.session_state.page = "拥挤度_一级行业概览"
             st.rerun()
-    
+
     with col2:
         st.markdown("""
             <div style='background:white;padding:20px;border-radius:16px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);text-align:center;opacity:0.6;'>
@@ -455,7 +470,7 @@ def render_请选择():
             </div>
         """, unsafe_allow_html=True)
         st.button("敬请期待", key="welcome_景气度", disabled=True, use_container_width=True)
-    
+
     with col3:
         st.markdown("""
             <div style='background:white;padding:20px;border-radius:16px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);text-align:center;opacity:0.6;'>
@@ -468,10 +483,10 @@ def render_请选择():
 
 
 def render_一级行业概览(df, latest_date_str):
-    """渲染一级行业概览页面"""
+    """渲染一级行业概览页面（响应式）"""
     st.markdown(f'<h1 class="main-title">拥挤度 - 一级行业概览</h1>', unsafe_allow_html=True)
     st.markdown(f'<p class="subtitle">数据截至 {latest_date_str}</p>', unsafe_allow_html=True)
-    
+
     st.markdown("""
         <div class="legend-box">
             <span style='font-weight:600;color:#374151;'>图例：</span>
@@ -482,87 +497,82 @@ def render_一级行业概览(df, latest_date_str):
             <span style='color:#f43f5e;'>● 超额收益</span>（右轴）
         </div>
     """, unsafe_allow_html=True)
-    
+
     with st.spinner("正在计算指标..."):
         col_info = identify_columns_by_category(df, category_filter="一级行业")
-        
+
         if len(col_info["industry_names"]) == 0:
             st.error("未找到一级行业数据")
             return
-        
+
         c15, r15, v15 = calculate_indicators(df, col_info, 15, 15)
         data_15 = standardize_data(c15, v15, r15, col_info["industry_names"], 15, 15)
-        
+
         c20, r20, v20 = calculate_indicators(df, col_info, 20, 55)
         data_20 = standardize_data(c20, v20, r20, col_info["industry_names"], 20, 55)
-    
+
     total_count = len([n for n in col_info["industry_names"] if n in data_15 and n in data_20])
-    st.markdown(f"<p style='color:#6b7280;margin-bottom:16px;font-size:0.9rem;'>共 <b>{total_count}</b> 个一级行业</p>", unsafe_allow_html=True)
-    
-    # 检测屏幕宽度（简化判断）
-    is_mobile = st.session_state.get('is_mobile', True)
-    
+    st.markdown(f"<p style='color:#6b7280;margin-bottom:16px;font-size:0.9rem;'>共 <b>{total_count}</b> 个一级行业</p>",
+                unsafe_allow_html=True)
+
+    # 检测是否为移动端（根据屏幕宽度判断）
+    is_mobile = st.session_state.get('is_mobile', False)
+
     for name in col_info["industry_names"]:
         if name not in data_15 or name not in data_20:
             continue
-        
-        st.markdown(f'<span class="industry-label">{name}</span>', unsafe_allow_html=True)
-        
+
+        st.markdown(f"""
+            <div class="chart-card">
+                <span class="industry-label">{name}</span>
+            </div>
+        """, unsafe_allow_html=True)
+
         if is_mobile:
-            # 移动端：横向滚动容器，保持比例
-            st.markdown('<div class="chart-container"><div class="chart-inner">', unsafe_allow_html=True)
-            
-            fig_15 = create_chart(name, data_15[name], "拥挤度15天 | 超额收益15天", is_mobile=True)
-            st.plotly_chart(fig_15, use_container_width=False, key=f"{name}_15")
-            
-            st.markdown('</div></div>', unsafe_allow_html=True)
-            
-            st.markdown('<div class="chart-container"><div class="chart-inner">', unsafe_allow_html=True)
-            
-            fig_20 = create_chart(name, data_20[name], "拥挤度20天 | 超额收益55天", is_mobile=True)
-            st.plotly_chart(fig_20, use_container_width=False, key=f"{name}_20")
-            
-            st.markdown('</div></div>', unsafe_allow_html=True)
+            # 移动端：上下排列，增大高度
+            fig_15 = create_chart(name, data_15[name], "拥挤度15天 | 超额收益15天", height=320, is_mobile=True)
+            st.plotly_chart(fig_15, use_container_width=True, key=f"{name}_15")
+
+            fig_20 = create_chart(name, data_20[name], "拥挤度20天 | 超额收益55天", height=320, is_mobile=True)
+            st.plotly_chart(fig_20, use_container_width=True, key=f"{name}_20")
         else:
             # PC端：左右排列
             col1, col2 = st.columns(2)
-            
+
             with col1:
-                st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-                fig_15 = create_chart(name, data_15[name], "拥挤度15天 | 超额收益15天", is_mobile=False)
+                fig_15 = create_chart(name, data_15[name], "拥挤度15天 | 超额收益15天", height=380, is_mobile=False)
                 st.plotly_chart(fig_15, use_container_width=True, key=f"{name}_15")
-                st.markdown('</div>', unsafe_allow_html=True)
-            
+
             with col2:
-                st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-                fig_20 = create_chart(name, data_20[name], "拥挤度20天 | 超额收益55天", is_mobile=False)
+                fig_20 = create_chart(name, data_20[name], "拥挤度20天 | 超额收益55天", height=380, is_mobile=False)
                 st.plotly_chart(fig_20, use_container_width=True, key=f"{name}_20")
-                st.markdown('</div>', unsafe_allow_html=True)
-        
+
         st.markdown("<hr>", unsafe_allow_html=True)
 
 
 def render_细分行业筛选(df, latest_date_str):
-    """渲染细分行业筛选页面"""
+    """渲染细分行业筛选页面（响应式）"""
     st.markdown(f'<h1 class="main-title">拥挤度 - 细分行业筛选</h1>', unsafe_allow_html=True)
     st.markdown(f'<p class="subtitle">数据截至 {latest_date_str}</p>', unsafe_allow_html=True)
-    
+
     col_info_all = identify_columns_by_category(df, category_filter="细分行业")
     industry_options = col_info_all["industry_names"]
-    
+
     if len(industry_options) == 0:
         st.error("未找到细分行业数据")
         return
-    
-    st.markdown(f"<p style='color:#6b7280;margin-bottom:12px;font-size:0.9rem;'>可选 <b>{len(industry_options)}</b> 个细分行业</p>", unsafe_allow_html=True)
-    
+
+    st.markdown(
+        f"<p style='color:#6b7280;margin-bottom:12px;font-size:0.9rem;'>可选 <b>{len(industry_options)}</b> 个细分行业</p>",
+        unsafe_allow_html=True)
+
     selected = st.multiselect(
         "🔍 选择要分析的细分行业（支持多选）",
         options=industry_options,
         default=[],
         placeholder="请选择行业..."
     )
-    
+
     if not selected:
         st.markdown("""
             <div class="info-box">
@@ -571,7 +581,7 @@ def render_细分行业筛选(df, latest_date_str):
             </div>
         """, unsafe_allow_html=True)
         return
-    
+
     st.markdown("""
         <div class="legend-box">
             <span style='font-weight:600;color:#374151;'>图例：</span>
@@ -582,9 +592,9 @@ def render_细分行业筛选(df, latest_date_str):
             <span style='color:#f43f5e;'>● 超额收益</span>（右轴）
         </div>
     """, unsafe_allow_html=True)
-    
-    is_mobile = st.session_state.get('is_mobile', True)
-    
+
+    is_mobile = st.session_state.get('is_mobile', False)
+
     with st.spinner(f"正在计算 {len(selected)} 个行业的指标..."):
         col_info = {
             "industry_names": selected,
@@ -594,54 +604,46 @@ def render_细分行业筛选(df, latest_date_str):
             "ret_dict": {k: v for k, v in col_info_all["ret_dict"].items() if k in selected},
             "vol_dict": {k: v for k, v in col_info_all["vol_dict"].items() if k in selected},
         }
-        
+
         try:
             c15, r15, v15 = calculate_indicators(df, col_info, 15, 15)
             data_15 = standardize_data(c15, v15, r15, selected, 15, 15)
-            
+
             c20, r20, v20 = calculate_indicators(df, col_info, 20, 55)
             data_20 = standardize_data(c20, v20, r20, selected, 20, 55)
-            
+
         except Exception as e:
             st.error(f"计算出错: {e}")
             return
-    
+
     for name in selected:
         if name not in data_15 or name not in data_20:
             st.warning(f"{name}: 数据不足")
             continue
-        
-        st.markdown(f'<span class="industry-label">{name}</span>', unsafe_allow_html=True)
-        
+
+        st.markdown(f"""
+            <div class="chart-card">
+                <span class="industry-label">{name}</span>
+            </div>
+        """, unsafe_allow_html=True)
+
         if is_mobile:
-            st.markdown('<div class="chart-container"><div class="chart-inner">', unsafe_allow_html=True)
-            
-            fig_15 = create_chart(name, data_15[name], "拥挤度15天 | 超额收益15天", is_mobile=True)
-            st.plotly_chart(fig_15, use_container_width=False, key=f"细分_{name}_15")
-            
-            st.markdown('</div></div>', unsafe_allow_html=True)
-            
-            st.markdown('<div class="chart-container"><div class="chart-inner">', unsafe_allow_html=True)
-            
-            fig_20 = create_chart(name, data_20[name], "拥挤度20天 | 超额收益55天", is_mobile=True)
-            st.plotly_chart(fig_20, use_container_width=False, key=f"细分_{name}_20")
-            
-            st.markdown('</div></div>', unsafe_allow_html=True)
+            fig_15 = create_chart(name, data_15[name], "拥挤度15天 | 超额收益15天", height=320, is_mobile=True)
+            st.plotly_chart(fig_15, use_container_width=True, key=f"细分_{name}_15")
+
+            fig_20 = create_chart(name, data_20[name], "拥挤度20天 | 超额收益55天", height=320, is_mobile=True)
+            st.plotly_chart(fig_20, use_container_width=True, key=f"细分_{name}_20")
         else:
             col1, col2 = st.columns(2)
-            
+
             with col1:
-                st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-                fig_15 = create_chart(name, data_15[name], "拥挤度15天 | 超额收益15天", is_mobile=False)
+                fig_15 = create_chart(name, data_15[name], "拥挤度15天 | 超额收益15天", height=380, is_mobile=False)
                 st.plotly_chart(fig_15, use_container_width=True, key=f"细分_{name}_15")
-                st.markdown('</div>', unsafe_allow_html=True)
-            
+
             with col2:
-                st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-                fig_20 = create_chart(name, data_20[name], "拥挤度20天 | 超额收益55天", is_mobile=False)
+                fig_20 = create_chart(name, data_20[name], "拥挤度20天 | 超额收益55天", height=380, is_mobile=False)
                 st.plotly_chart(fig_20, use_container_width=True, key=f"细分_{name}_20")
-                st.markdown('</div>', unsafe_allow_html=True)
-        
+
         st.markdown("<hr>", unsafe_allow_html=True)
 
 
@@ -651,13 +653,23 @@ def render_细分行业筛选(df, latest_date_str):
 
 def main():
     render_sidebar()
-    
-    # 默认按移动端渲染（比例优先）
+
+    # 检测是否为移动端
+    # 使用JavaScript检测屏幕宽度
+    st.markdown("""
+        <script>
+            const width = window.innerWidth;
+            const isMobile = width < 768;
+            window.parent.postMessage({type: 'streamlit:setSessionState', isMobile: isMobile}, '*');
+        </script>
+    """, unsafe_allow_html=True)
+
+    # 默认假设为移动端（保险起见）
     if 'is_mobile' not in st.session_state:
         st.session_state.is_mobile = True
-    
+
     file_path = "data.xlsx"
-    
+
     try:
         df, latest_date_str = load_data(file_path)
     except Exception as e:
@@ -665,9 +677,9 @@ def main():
         import traceback
         st.error(traceback.format_exc())
         return
-    
+
     current_page = st.session_state.page
-    
+
     if current_page == "请选择":
         render_请选择()
     elif current_page == "拥挤度_一级行业概览":
