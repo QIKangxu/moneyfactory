@@ -661,7 +661,7 @@ def main():
     render_sidebar()
 
     # 加载数据
-    file_path = r"C:\Users\xucla\Desktop\data.xlsx"
+    file_path = "data.xlsx"
 
     try:
         df, latest_date_str = load_data(file_path)
