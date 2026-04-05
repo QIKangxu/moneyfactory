@@ -315,87 +315,82 @@ def standardize_data(crowding, volatility, relative_returns_sum, industry_names,
     return scaled_data
 
 
-def create_chart(name, data, params_label, height=380, is_mobile=False):
-    """创建图表（支持移动端适配）"""
+def create_chart(name, data, params_label, height=320):
+    """创建图表（美化版）"""
     fig = go.Figure()
-
+    
+    # 使用更现代的配色
     colors = {
-        '拥挤度': '#6366f1',
-        '波动率': '#10b981',
-        '超额收益': '#f43f5e'
+        '拥挤度': '#6366f1',    # 靛蓝
+        '波动率': '#10b981',    # 翠绿
+        '超额收益': '#f43f5e'   # 玫瑰红
     }
-
-    # 移动端调整字体大小
-    font_size = 9 if is_mobile else 10
-    title_size = 14 if is_mobile else 16
-
+    
     fig.add_trace(go.Scatter(
         x=data.index, y=data["拥挤度"], mode='lines',
-        name='拥挤度', line=dict(color=colors['拥挤度'], width=2),
+        name='拥挤度', line=dict(color=colors['拥挤度'], width=2.5),
         yaxis='y', showlegend=True,
-        hovertemplate='%{x|%Y-%m-%d}<br>拥挤度: %{y:.1%}<extra></extra>'
+        hovertemplate='%{x|%Y-%m-%d}<br>拥挤度: %{y:.2%}<extra></extra>'
     ))
     fig.add_trace(go.Scatter(
         x=data.index, y=data["波动率"], mode='lines',
-        name='波动率', line=dict(color=colors['波动率'], width=2),
+        name='波动率', line=dict(color=colors['波动率'], width=2.5),
         yaxis='y', showlegend=True,
-        hovertemplate='%{x|%Y-%m-%d}<br>波动率: %{y:.1%}<extra></extra>'
+        hovertemplate='%{x|%Y-%m-%d}<br>波动率: %{y:.2%}<extra></extra>'
     ))
     fig.add_trace(go.Scatter(
         x=data.index, y=data["超额收益"], mode='lines',
-        name='超额收益', line=dict(color=colors['超额收益'], width=2),
+        name='超额收益', line=dict(color=colors['超额收益'], width=2.5),
         yaxis='y2', showlegend=True,
-        hovertemplate='%{x|%Y-%m-%d}<br>超额收益: %{y:.1%}<extra></extra>'
+        hovertemplate='%{x|%Y-%m-%d}<br>超额收益: %{y:.2%}<extra></extra>'
     ))
-
-    # 移动端调整边距
-    margin_top = 70 if is_mobile else 80
-    margin_lr = 40 if is_mobile else 60
 
     fig.update_layout(
         title=dict(
             text=f"<b>{name}</b>",
-            font=dict(size=title_size, color='#1f2937'),
+            font=dict(size=16, color='#1f2937'),
             x=0.5, xanchor='center',
             y=0.98, yanchor='top'
         ),
+        # 参数标签放左边
         annotations=[dict(
-            text=f"<span style='color:#6b7280;font-size:{font_size}px;'>{params_label}</span>",
+            text=f"<span style='color:#6b7280;font-size:11px;'>{params_label}</span>",
             xref='paper', yref='paper',
-            x=0, y=1.08 if is_mobile else 1.12,
+            x=0, y=1.12,
             xanchor='left', yanchor='top',
             showarrow=False
         )],
         xaxis=dict(
             showline=True, linecolor='#e5e7eb', linewidth=1,
-            tickfont=dict(color='#6b7280', size=font_size),
+            tickfont=dict(color='#6b7280', size=10),
             zeroline=False, showgrid=True, gridcolor='#f3f4f6',
-            tickformat='%Y-%m' if not is_mobile else '%y-%m'
+            tickformat='%Y-%m'
         ),
         yaxis=dict(
             side='left', range=[0, 1], tickmode='array', tickvals=[0, 0.5, 1],
-            ticktext=['0%', '50%', '100%'], tickfont=dict(color='#6b7280', size=font_size),
+            ticktext=['0%', '50%', '100%'], tickfont=dict(color='#6b7280', size=10),
             showgrid=True, gridcolor='#f3f4f6',
             showline=True, linecolor='#e5e7eb', linewidth=1, zeroline=False,
-            title=dict(text='拥挤度/波动率', font=dict(size=font_size, color='#9ca3af'))
+            title=dict(text='拥挤度/波动率', font=dict(size=10, color='#9ca3af'))
         ),
         yaxis2=dict(
             overlaying='y', side='right', tickformat='.0%',
-            tickfont=dict(color='#6b7280', size=font_size),
+            tickfont=dict(color='#6b7280', size=10),
             showline=True, linecolor='#e5e7eb', linewidth=1,
             showgrid=False, zeroline=False,
-            title=dict(text='超额收益', font=dict(size=font_size, color='#9ca3af'))
+            title=dict(text='超额收益', font=dict(size=10, color='#9ca3af'))
         ),
+        # 图例放右边，无边框
         legend=dict(
             orientation='h',
-            yanchor='top', y=1.08 if is_mobile else 1.12,
+            yanchor='top', y=1.12,
             xanchor='right', x=1,
-            bgcolor='rgba(0,0,0,0)',
-            borderwidth=0,
-            font=dict(size=font_size),
+            bgcolor='rgba(0,0,0,0)',  # 透明背景
+            borderwidth=0,            # 无边框
+            font=dict(size=10),
             itemsizing='constant'
         ),
-        margin=dict(l=margin_lr, r=margin_lr, t=margin_top, b=40),
+        margin=dict(l=60, r=60, t=80, b=40),
         plot_bgcolor='white',
         paper_bgcolor='white',
         height=height,
