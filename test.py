@@ -2,6 +2,7 @@ import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 from sklearn.preprocessing import MinMaxScaler
+import numpy as np
 
 # =============================
 # 页面配置（必须放最前面）
@@ -189,6 +190,36 @@ def load_data(file_path):
     latest_date_str = latest_date.strftime("%Y年%m月%d日")
 
     return df, latest_date_str
+
+
+# =============================
+# 发现牛牛数据加载
+# =============================
+@st.cache_data(ttl=3600)
+def load_search_data():
+    """加载发现牛牛数据"""
+    file_path = "data.xlsx"
+    df = pd.read_excel(file_path, sheet_name='search')
+
+    # 转换持仓百分比
+    fund_cols = [col for col in df.columns if isinstance(col, str) and len(col) == 8 and col.isdigit()]
+    for col in fund_cols:
+        if df[col].dtype == object:
+            df[col] = df[col].str.replace('%', '').astype(float) / 100
+
+    # 计算衍生指标
+    df['净利润26E_修正%'] = (df['T日预测2026年净利润中值'] - df['T-30日预测2026年净利润中值']) / df[
+        'T-30日预测2026年净利润中值'].abs() * 100
+    df['机构数变化'] = df['T日评级机构家数'] - df['T-1日评级机构家数']
+
+    latest_fund_col = fund_cols[-1] if fund_cols else None
+    df['最新持仓比例'] = df[latest_fund_col] if latest_fund_col else np.nan
+
+    # 计算上调标志
+    df['上调26年业绩'] = df['T日预测2026年净利润中值'] > df['T-1日预测2026年净利润中值']
+    df['上调27年业绩'] = df['T日预测2027年净利润中值'] > df['T-1日预测2027年净利润中值']
+
+    return df
 
 
 # =============================
@@ -430,6 +461,11 @@ def render_sidebar():
         if st.button("🔍 细分行业筛选", key="nav_细分行业筛选", use_container_width=True):
             st.session_state.page = "拥挤度_细分行业筛选"
 
+    # 一级菜单：发现牛牛
+    with st.sidebar.expander("🐮 发现牛牛", expanded=False):
+        if st.button("🔍 盈利预测选股", key="nav_发现牛牛", use_container_width=True):
+            st.session_state.page = "发现牛牛"
+
     # 预留其他一级菜单位置
     with st.sidebar.expander("📈 景气度", expanded=False):
         st.button("行业景气度", disabled=True, use_container_width=True)
@@ -443,7 +479,7 @@ def render_sidebar():
     st.sidebar.markdown("---")
     st.sidebar.markdown("""
         <div style='text-align:center;color:#9ca3af;font-size:0.75rem;'>
-            系统版本 v1.2<br>
+            系统版本 v1.3<br>
             © 2026 工厂
         </div>
     """, unsafe_allow_html=True)
@@ -478,23 +514,25 @@ def render_请选择():
 
     with col2:
         st.markdown("""
+            <div style='background:white;padding:24px;border-radius:16px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);text-align:center;'>
+                <div style='font-size:2.5rem;margin-bottom:12px;'>🐮</div>
+                <h3 style='color:#1f2937;margin-bottom:8px;'>发现牛牛</h3>
+                <p style='color:#6b7280;font-size:0.875rem;'>基于盈利预测上调的智能选股</p>
+            </div>
+        """, unsafe_allow_html=True)
+        if st.button("进入发现牛牛", key="welcome_发现牛牛", use_container_width=True):
+            st.session_state.page = "发现牛牛"
+            st.rerun()
+
+    with col3:
+        st.markdown("""
             <div style='background:white;padding:24px;border-radius:16px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);text-align:center;opacity:0.6;'>
                 <div style='font-size:2.5rem;margin-bottom:12px;'>📈</div>
                 <h3 style='color:#1f2937;margin-bottom:8px;'>景气度分析</h3>
                 <p style='color:#6b7280;font-size:0.875rem;'>即将上线</p>
             </div>
         """, unsafe_allow_html=True)
-        st.button("敬请期待", key="welcome_景气度", disabled=True, use_container_width=True)  # 添加 key
-
-    with col3:
-        st.markdown("""
-            <div style='background:white;padding:24px;border-radius:16px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);text-align:center;opacity:0.6;'>
-                <div style='font-size:2.5rem;margin-bottom:12px;'>💰</div>
-                <h3 style='color:#1f2937;margin-bottom:8px;'>资金流向</h3>
-                <p style='color:#6b7280;font-size:0.875rem;'>即将上线</p>
-            </div>
-        """, unsafe_allow_html=True)
-        st.button("敬请期待", key="welcome_资金流向", disabled=True, use_container_width=True)  # 添加 key
+        st.button("敬请期待", key="welcome_景气度", disabled=True, use_container_width=True)
 
 
 def render_一级行业概览(df, latest_date_str):
@@ -653,6 +691,211 @@ def render_细分行业筛选(df, latest_date_str):
         st.markdown("<hr>", unsafe_allow_html=True)
 
 
+def render_发现牛牛():
+    """渲染发现牛牛页面 - 优化版"""
+    st.markdown(f'<h1 class="main-title">🐮 发现牛牛</h1>', unsafe_allow_html=True)
+    st.markdown(f'<p class="subtitle">基于盈利预测调整的智能选股工具</p>', unsafe_allow_html=True)
+
+    # 加载数据
+    try:
+        df = load_search_data()
+    except Exception as e:
+        st.error(f"数据加载失败: {e}")
+        return
+
+    # 中间筛选区域
+    st.markdown("### ⚙️ 筛选条件")
+
+    col1, col2, col3, col4 = st.columns([1.5, 1.5, 1, 1])
+
+    with col1:
+        min_cap_default = float(df['总市值'].min())
+        max_cap_default = float(df['总市值'].max())
+
+        cap_min = st.number_input("总市值最小值（亿元）", value=0.0, min_value=0.0, format="%.2f", key="cap_min_input")
+        cap_max = st.number_input("总市值最大值（亿元）", value=max_cap_default, min_value=0.0, format="%.2f",
+                                  key="cap_max_input")
+
+    with col2:
+        st.markdown("**2026年业绩**")
+        filter_up_26 = st.checkbox("📈 上调", value=False, help="T日预测 > T-1日预测", key="up_26")
+        filter_down_26 = st.checkbox("📉 下调", value=False, help="T日预测 < T-1日预测", key="down_26")
+        if filter_up_26 and filter_down_26:
+            st.warning("⚠️ 上调和下调不能同时选择")
+
+    with col3:
+        st.markdown("**2027年业绩**")
+        filter_up_27 = st.checkbox("📈 上调", value=False, help="T日预测 > T-1日预测", key="up_27")
+        filter_down_27 = st.checkbox("📉 下调", value=False, help="T日预测 < T-1日预测", key="down_27")
+        if filter_up_27 and filter_down_27:
+            st.warning("⚠️ 上调和下调不能同时选择")
+
+    with col4:
+        sort_by = st.selectbox("排序方式", ['总市值', '净利润26E_修正%', '机构数变化', '最新持仓比例', 'PE(26E)',
+                                            'T日预测2026年净利润中值'], index=0, key="sort_select")
+        top_n = st.number_input("显示数量", min_value=5, max_value=100, value=20, step=5, key="top_n_input")
+        query_btn = st.button("🔍 查询", use_container_width=True, type="primary", key="query_btn")
+
+    st.markdown("---")
+
+    if not query_btn:
+        st.markdown("""
+            <div class="info-box">
+                <div style='font-size:3rem;margin-bottom:16px;'>👆</div>
+                <p style='color:#6b7280;font-size:1.1rem;'>请设置筛选条件后，点击右侧"🔍 查询"按钮</p>
+                <p style='color:#9ca3af;font-size:0.9rem;margin-top:8px;'>支持：总市值范围 + 业绩上调/下调筛选</p>
+            </div>
+        """, unsafe_allow_html=True)
+        return
+
+    # 执行筛选
+    filtered_df = df.copy()
+    filtered_df = filtered_df[(filtered_df['总市值'] >= cap_min) & (filtered_df['总市值'] <= cap_max)]
+
+    if filter_up_26 and not filter_down_26:
+        filtered_df = filtered_df[filtered_df['上调26年业绩'] == True]
+    elif filter_down_26 and not filter_up_26:
+        filtered_df = filtered_df[filtered_df['上调26年业绩'] == False]
+
+    if filter_up_27 and not filter_down_27:
+        filtered_df = filtered_df[filtered_df['上调27年业绩'] == True]
+    elif filter_down_27 and not filter_up_27:
+        filtered_df = filtered_df[filtered_df['上调27年业绩'] == False]
+
+    filtered_df[sort_by] = filtered_df[sort_by].replace([np.inf, -np.inf], np.nan)
+    filtered_df = filtered_df.sort_values(by=sort_by, ascending=False, na_position='last')
+    result_df = filtered_df.head(int(top_n))
+
+    # 统计信息
+    col_stat1, col_stat2, col_stat3, col_stat4 = st.columns(4)
+    col_stat1.metric("📊 总标的数", f"{len(df):,}")
+    col_stat2.metric("✅ 筛选通过", f"{len(filtered_df):,}")
+    col_stat3.metric("🏆 当前展示", f"{len(result_df)}")
+    up_26_pct = (df['上调26年业绩'].sum() / len(df) * 100) if len(df) > 0 else 0
+    col_stat4.metric("📈 全市场上调26年占比", f"{up_26_pct:.1f}%")
+
+    st.markdown("---")
+
+    if len(result_df) == 0:
+        st.warning("⚠️ 没有符合条件的标的，请调整筛选条件")
+        return
+
+    # 展示表格
+    display_cols = ['证券代码', '证券简称', '所属一级行业', '总市值', 'T日预测2026年净利润中值',
+                    'T-1日预测2026年净利润中值',
+                    'T日预测2027年净利润中值', 'T-1日预测2027年净利润中值', 'PE(26E)', '净利润26E_修正%', '机构数变化',
+                    '最新持仓比例', '上调26年业绩', '上调27年业绩']
+    display_cols = [c for c in display_cols if c in result_df.columns]
+
+    show_df = result_df[display_cols].copy()
+    if '最新持仓比例' in show_df.columns:
+        show_df['最新持仓比例'] = (show_df['最新持仓比例'] * 100).apply(lambda x: f"{x:.2f}%" if pd.notna(x) else "-")
+    if '上调26年业绩' in show_df.columns:
+        show_df['上调26年业绩'] = show_df['上调26年业绩'].apply(lambda x: '📈 上调' if x else '📉 下调')
+    if '上调27年业绩' in show_df.columns:
+        show_df['上调27年业绩'] = show_df['上调27年业绩'].apply(lambda x: '📈 上调' if x else '📉 下调')
+
+    # 动态计算表格高度：表头35px + 每行35px，最小200px，最大800px
+    row_count = len(show_df)
+    table_height = min(max(35 + row_count * 35, 200), 800)
+
+    st.dataframe(show_df, use_container_width=True, height=table_height, hide_index=True)
+
+    # 基金持仓折线图
+    st.markdown("---")
+    st.subheader("📈 基金持仓比例趋势")
+
+    # 获取基金持仓列（匹配 20200331、20200630 这种格式）
+    fund_cols = []
+    for col in result_df.columns:
+        col_str = str(col)
+        if len(col_str) == 8 and col_str.isdigit():
+            fund_cols.append(col)
+    fund_cols = sorted(fund_cols)
+
+    if len(fund_cols) > 0 and len(result_df) > 0:
+        import plotly.graph_objects as go
+
+        # 为每个标的单独画图，一排放2个
+        for i in range(0, len(result_df), 2):
+            cols = st.columns(2)
+
+            # 第一个图表
+            with cols[0]:
+                row = result_df.iloc[i]
+                fig1 = go.Figure()
+
+                fund_values = []
+                dates = []
+                for col in fund_cols:
+                    val = row[col]
+                    if pd.notna(val):
+                        fund_values.append(val * 100)
+                        col_str = str(col)
+                        dates.append(f"{col_str[:4]}-{col_str[4:6]}")
+
+                if len(fund_values) > 0:
+                    fig1.add_trace(go.Scatter(
+                        x=dates, y=fund_values, mode='lines+markers',
+                        line=dict(width=2, color='#6366f1'),
+                        marker=dict(size=6),
+                        hovertemplate='%{x}<br>%{y:.2f}%<extra></extra>'
+                    ))
+
+                    fig1.update_layout(
+                        title=f"{row['证券简称']} ({row['证券代码']})",
+                        xaxis_title="时间",
+                        yaxis_title="基金持仓比例(%)",
+                        height=300,
+                        showlegend=False,
+                        plot_bgcolor='white',
+                        paper_bgcolor='white',
+                        margin=dict(l=50, r=30, t=50, b=40),
+                        xaxis=dict(showgrid=True, gridcolor='#f0f0f0', tickfont=dict(size=10)),
+                        yaxis=dict(showgrid=True, gridcolor='#f0f0f0', tickfont=dict(size=10))
+                    )
+                    st.plotly_chart(fig1, use_container_width=True, key=f"fund_chart_{i}")
+
+            # 第二个图表（如果有的话）
+            if i + 1 < len(result_df):
+                with cols[1]:
+                    row = result_df.iloc[i + 1]
+                    fig2 = go.Figure()
+
+                    fund_values = []
+                    dates = []
+                    for col in fund_cols:
+                        val = row[col]
+                        if pd.notna(val):
+                            fund_values.append(val * 100)
+                            col_str = str(col)
+                            dates.append(f"{col_str[:4]}-{col_str[4:6]}")
+
+                    if len(fund_values) > 0:
+                        fig2.add_trace(go.Scatter(
+                            x=dates, y=fund_values, mode='lines+markers',
+                            line=dict(width=2, color='#10b981'),
+                            marker=dict(size=6),
+                            hovertemplate='%{x}<br>%{y:.2f}%<extra></extra>'
+                        ))
+
+                        fig2.update_layout(
+                            title=f"{row['证券简称']} ({row['证券代码']})",
+                            xaxis_title="时间",
+                            yaxis_title="基金持仓比例(%)",
+                            height=300,
+                            showlegend=False,
+                            plot_bgcolor='white',
+                            paper_bgcolor='white',
+                            margin=dict(l=50, r=30, t=50, b=40),
+                            xaxis=dict(showgrid=True, gridcolor='#f0f0f0', tickfont=dict(size=10)),
+                            yaxis=dict(showgrid=True, gridcolor='#f0f0f0', tickfont=dict(size=10))
+                        )
+                        st.plotly_chart(fig2, use_container_width=True, key=f"fund_chart_{i + 1}")
+    else:
+        st.info(f"暂无基金持仓数据")
+
+
 # =============================
 # 主程序入口
 # =============================
@@ -661,7 +904,7 @@ def main():
     # 渲染侧边栏
     render_sidebar()
 
-    # 加载数据
+    # 加载数据（拥挤度分析用）
     file_path = "data.xlsx"
 
     try:
@@ -683,6 +926,9 @@ def main():
 
     elif current_page == "拥挤度_细分行业筛选":
         render_细分行业筛选(df, latest_date_str)
+
+    elif current_page == "发现牛牛":
+        render_发现牛牛()
 
     else:
         st.error("未知页面")
