@@ -344,19 +344,19 @@ def create_chart(name, data, params_label, height=320):
 
     fig.add_trace(go.Scatter(
         x=data.index, y=data["拥挤度"], mode='lines',
-        name='拥挤度', line=dict(color=colors['拥挤度'], width=2.5),
+        name='拥挤度', line=dict(color=colors['拥挤度'], width=1),
         yaxis='y', showlegend=True,
         hovertemplate='%{x|%Y-%m-%d}<br>拥挤度: %{y:.2%}<extra></extra>'
     ))
     fig.add_trace(go.Scatter(
         x=data.index, y=data["波动率"], mode='lines',
-        name='波动率', line=dict(color=colors['波动率'], width=2.5),
+        name='波动率', line=dict(color=colors['波动率'], width=1),
         yaxis='y', showlegend=True,
         hovertemplate='%{x|%Y-%m-%d}<br>波动率: %{y:.2%}<extra></extra>'
     ))
     fig.add_trace(go.Scatter(
         x=data.index, y=data["超额收益"], mode='lines',
-        name='超额收益', line=dict(color=colors['超额收益'], width=2.5),
+        name='超额收益', line=dict(color=colors['超额收益'], width=1),
         yaxis='y2', showlegend=True,
         hovertemplate='%{x|%Y-%m-%d}<br>超额收益: %{y:.2%}<extra></extra>'
     ))
