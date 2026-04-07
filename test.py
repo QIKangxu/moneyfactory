@@ -17,9 +17,11 @@ def check_password():
             del st.session_state["password"]
         else:
             st.session_state["password_correct"] = False
+            st.session_state["password_attempted"] = True  # 标记已尝试
 
     if "password_correct" not in st.session_state:
         st.session_state["password_correct"] = False
+        st.session_state["password_attempted"] = False  # 初始未尝试
 
     if not st.session_state["password_correct"]:
         st.set_page_config(page_title="工厂 | 登录", page_icon="🔒")
@@ -75,7 +77,8 @@ def check_password():
             label_visibility="collapsed"
         )
         
-        if st.session_state.get("password_correct") is False:
+        # 只有真正尝试过且失败才显示错误
+        if st.session_state.get("password_attempted") and not st.session_state["password_correct"]:
             st.error("密码错误，请重试")
         
         return False
@@ -88,7 +91,7 @@ if not check_password():
 
 st.sidebar.markdown("### 🔥 版本: v1.6 - 测试标记")
 # =============================
-# 页面配置（必须放最前面，但在密码验证后）
+# 页面配置（必须放在最前面，但在密码验证后）
 # =============================
 st.set_page_config(
     page_title="工厂 | 行业分析系统",
