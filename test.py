@@ -4,10 +4,91 @@ import streamlit as st
 import plotly.graph_objects as go
 from sklearn.preprocessing import MinMaxScaler
 import os
+from datetime import datetime
+
+# =============================
+# 密码保护（必须放在最前面）
+# =============================
+def check_password():
+    """返回 True 表示密码验证通过"""
+    def password_entered():
+        if st.session_state["password"] == st.secrets.get("APP_PASSWORD", "factory2026"):
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        st.session_state["password_correct"] = False
+
+    if not st.session_state["password_correct"]:
+        st.set_page_config(page_title="工厂 | 登录", page_icon="🔒")
+        
+        st.markdown("""
+            <style>
+                .login-container {
+                    max-width: 400px;
+                    margin: 100px auto;
+                    padding: 40px;
+                    background: white;
+                    border-radius: 16px;
+                    box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+                    text-align: center;
+                }
+                .login-icon {
+                    font-size: 4rem;
+                    margin-bottom: 20px;
+                }
+                .login-title {
+                    font-size: 1.5rem;
+                    font-weight: 600;
+                    color: #1f2937;
+                    margin-bottom: 8px;
+                }
+                .login-subtitle {
+                    color: #6b7280;
+                    font-size: 0.9rem;
+                    margin-bottom: 32px;
+                }
+                .stTextInput > div > div > input {
+                    text-align: center;
+                    font-size: 1.1rem;
+                    letter-spacing: 2px;
+                }
+            </style>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
+            <div class="login-container">
+                <div class="login-icon">🏭</div>
+                <div class="login-title">工厂系统</div>
+                <div class="login-subtitle">请输入访问密码</div>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        st.text_input(
+            "密码",
+            type="password",
+            placeholder="请输入密码...",
+            key="password",
+            on_change=password_entered,
+            label_visibility="collapsed"
+        )
+        
+        if st.session_state.get("password_correct") is False:
+            st.error("密码错误，请重试")
+        
+        return False
+    
+    return True
+
+# 检查密码
+if not check_password():
+    st.stop()
 
 st.sidebar.markdown("### 🔥 版本: v1.6 - 测试标记")
 # =============================
-# 页面配置（必须放最前面）
+# 页面配置（必须放最前面，但在密码验证后）
 # =============================
 st.set_page_config(
     page_title="工厂 | 行业分析系统",
@@ -676,7 +757,6 @@ def render_earning_revision():
     """发现牛牛 - 业绩上修（Earning Revision）"""
     st.markdown(f'<h1 class="main-title">🐮 业绩上修</h1>', unsafe_allow_html=True)
 
-    from datetime import datetime
     today_str = datetime.now().strftime("%Y年%m月%d日")
     st.markdown(f'<p class="subtitle">数据截至 {today_str}</p>', unsafe_allow_html=True)
 
