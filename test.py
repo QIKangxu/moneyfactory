@@ -422,6 +422,11 @@ def create_icvr_chart(name, data, params_label, height=320):
 def render_sidebar():
     """渲染侧边栏导航"""
     st.sidebar.title("🏭 工厂")
+    
+    # 添加清除缓存按钮
+    if st.sidebar.button("🔄 刷新数据"):
+        st.cache_data.clear()
+        st.rerun()
 
     # 一级菜单：大盘速览
     with st.sidebar.expander("📊 大盘速览", expanded=False):
