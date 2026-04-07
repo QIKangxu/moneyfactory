@@ -904,7 +904,7 @@ def main():
     DATA_CONFIG = {
         'icvr_file': "data.xlsx",
         'icvr_sheet': "data",
-        'earning_file': "data.xlsx",
+        'earning_file': "search.xlsx",
         'earning_sheet': "search"
     }
 
