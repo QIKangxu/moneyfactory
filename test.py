@@ -12,7 +12,7 @@ from datetime import datetime
 def check_password():
     """返回 True 表示密码验证通过"""
     def password_entered():
-        if st.session_state["password"] == st.secrets.get("APP_PASSWORD", "factory2026"):
+        if st.session_state["password"] == st.secrets.get("APP_PASSWORD", "rytz666"):
             st.session_state["password_correct"] = True
             del st.session_state["password"]
         else:
