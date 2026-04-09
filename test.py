@@ -636,10 +636,10 @@ def render_icvr_overview(df, latest_date_str):
             st.error("未找到一级行业数据，请检查数据源")
             return
 
-        c15, r15, v15 = calculate_icvr_indicators(df, col_info, 15, 15)
+        c15, r15, v20 = calculate_icvr_indicators(df, col_info, 15, 15)
         data_15 = standardize_icvr_data(c15, v15, r15, col_info["industry_names"], 15, 15)
 
-        c20, r20, v20 = calculate_icvr_indicators(df, col_info, 20, 55)
+        c20, r55, v20 = calculate_icvr_indicators(df, col_info, 20, 55)
         data_20 = standardize_icvr_data(c20, v20, r20, col_info["industry_names"], 20, 55)
 
     total_count = len([n for n in col_info["industry_names"] if n in data_15 and n in data_20])
@@ -659,7 +659,7 @@ def render_icvr_overview(df, latest_date_str):
         col1, col2 = st.columns(2)
 
         with col1:
-            fig_15 = create_icvr_chart(name, data_15[name], "C:15天 | V:15天 | R:15天")
+            fig_15 = create_icvr_chart(name, data_15[name], "C:15天 | V:20天 | R:15天")
             st.plotly_chart(fig_15, use_container_width=True, key=f"icvr_{name}_15")
 
         with col2:
@@ -722,10 +722,10 @@ def render_icvr_filter(df, latest_date_str):
         }
 
         try:
-            c15, r15, v15 = calculate_icvr_indicators(df, col_info, 15, 15)
+            c15, r15, v20 = calculate_icvr_indicators(df, col_info, 15, 15)
             data_15 = standardize_icvr_data(c15, v15, r15, selected, 15, 15)
 
-            c20, r20, v20 = calculate_icvr_indicators(df, col_info, 20, 55)
+            c20, r55, v20 = calculate_icvr_indicators(df, col_info, 20, 55)
             data_20 = standardize_icvr_data(c20, v20, r20, selected, 20, 55)
 
         except Exception as e:
