@@ -746,7 +746,7 @@ def render_icvr_filter(df, latest_date_str):
         col1, col2 = st.columns(2)
 
         with col1:
-            fig_15 = create_icvr_chart(name, data_15[name], "C:15天 | V:15天 | R:15天")
+            fig_15 = create_icvr_chart(name, data_15[name], "C:15天 | V:20天 | R:15天")
             st.plotly_chart(fig_15, use_container_width=True, key=f"icvr_filter_{name}_15")
 
         with col2:
