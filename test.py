@@ -637,10 +637,10 @@ def render_icvr_overview(df, latest_date_str):
             return
 
         c15, r15, v20 = calculate_icvr_indicators(df, col_info, 15, 15)
-        data_15 = standardize_icvr_data(c15, v15, r15, col_info["industry_names"], 15, 15)
+        data_15 = standardize_icvr_data(c15, v20, r15, col_info["industry_names"], 15, 15)
 
         c20, r55, v20 = calculate_icvr_indicators(df, col_info, 20, 55)
-        data_20 = standardize_icvr_data(c20, v20, r20, col_info["industry_names"], 20, 55)
+        data_20 = standardize_icvr_data(c20, v20, r55, col_info["industry_names"], 20, 55)
 
     total_count = len([n for n in col_info["industry_names"] if n in data_15 and n in data_20])
     st.markdown(f"<p style='color:#6b7280;margin-bottom:20px;'>共 <b>{total_count}</b> 个一级行业</p>",
@@ -723,10 +723,10 @@ def render_icvr_filter(df, latest_date_str):
 
         try:
             c15, r15, v20 = calculate_icvr_indicators(df, col_info, 15, 15)
-            data_15 = standardize_icvr_data(c15, v15, r15, selected, 15, 15)
+            data_15 = standardize_icvr_data(c15, v20, r15, selected, 15, 15)
 
             c20, r55, v20 = calculate_icvr_indicators(df, col_info, 20, 55)
-            data_20 = standardize_icvr_data(c20, v20, r20, selected, 20, 55)
+            data_20 = standardize_icvr_data(c20, v20, r55, selected, 20, 55)
 
         except Exception as e:
             st.error(f"计算出错: {e}")
