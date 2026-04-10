@@ -4,94 +4,10 @@ import streamlit as st
 import plotly.graph_objects as go
 from sklearn.preprocessing import MinMaxScaler
 import os
-from datetime import datetime
 
+st.sidebar.markdown("### 🔥 版本: 4月10日")
 # =============================
-# 密码保护（必须放在最前面）
-# =============================
-def check_password():
-    """返回 True 表示密码验证通过"""
-    def password_entered():
-        if st.session_state["password"] == st.secrets.get("APP_PASSWORD", "rytz666"):
-            st.session_state["password_correct"] = True
-            del st.session_state["password"]
-        else:
-            st.session_state["password_correct"] = False
-            st.session_state["password_attempted"] = True  # 标记已尝试
-
-    if "password_correct" not in st.session_state:
-        st.session_state["password_correct"] = False
-        st.session_state["password_attempted"] = False  # 初始未尝试
-
-    if not st.session_state["password_correct"]:
-        st.set_page_config(page_title="工厂 | 登录", page_icon="🔒")
-        
-        st.markdown("""
-            <style>
-                .login-container {
-                    max-width: 400px;
-                    margin: 100px auto;
-                    padding: 40px;
-                    background: white;
-                    border-radius: 16px;
-                    box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-                    text-align: center;
-                }
-                .login-icon {
-                    font-size: 4rem;
-                    margin-bottom: 20px;
-                }
-                .login-title {
-                    font-size: 1.5rem;
-                    font-weight: 600;
-                    color: #1f2937;
-                    margin-bottom: 8px;
-                }
-                .login-subtitle {
-                    color: #6b7280;
-                    font-size: 0.9rem;
-                    margin-bottom: 32px;
-                }
-                .stTextInput > div > div > input {
-                    text-align: center;
-                    font-size: 1.1rem;
-                    letter-spacing: 2px;
-                }
-            </style>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("""
-            <div class="login-container">
-                <div class="login-icon">🏭</div>
-                <div class="login-title">工厂系统</div>
-                <div class="login-subtitle">请输入访问密码</div>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        st.text_input(
-            "密码",
-            type="password",
-            placeholder="请输入密码...",
-            key="password",
-            on_change=password_entered,
-            label_visibility="collapsed"
-        )
-        
-        # 只有真正尝试过且失败才显示错误
-        if st.session_state.get("password_attempted") and not st.session_state["password_correct"]:
-            st.error("密码错误，请重试")
-        
-        return False
-    
-    return True
-
-# 检查密码
-if not check_password():
-    st.stop()
-
-st.sidebar.markdown("### 🔥 版本: v1.6 - 测试标记")
-# =============================
-# 页面配置（必须放在最前面，但在密码验证后）
+# 页面配置（必须放最前面）
 # =============================
 st.set_page_config(
     page_title="工厂 | 行业分析系统",
@@ -234,6 +150,31 @@ if "page" not in st.session_state:
     st.session_state.page = "welcome"
 if "show_icvr_submenu" not in st.session_state:
     st.session_state.show_icvr_submenu = False
+
+
+# =============================
+# 数据加载函数（Market Overview）
+# =============================
+@st.cache_data(ttl=3600)
+def load_market_overview_data(file_path, sheet_name="ov"):
+    """加载市场概览数据（指数行情）"""
+    df = pd.read_excel(file_path, sheet_name=sheet_name)
+
+    # 获取数据日期（从列名中提取，如"2026/4/3 当日涨跌幅"）
+    date_cols = [col for col in df.columns if '当日涨跌幅' in str(col)]
+    latest_date_str = "未知日期"
+
+    if date_cols:
+        col_str = str(date_cols[0])
+        if ' ' in col_str:
+            date_part = col_str.split(' ')[0]
+            try:
+                latest_date = pd.to_datetime(date_part)
+                latest_date_str = latest_date.strftime("%Y年%m月%d日")
+            except:
+                latest_date_str = date_part
+
+    return df, latest_date_str
 
 
 # =============================
@@ -506,7 +447,7 @@ def create_icvr_chart(name, data, params_label, height=320):
 def render_sidebar():
     """渲染侧边栏导航"""
     st.sidebar.title("🏭 工厂")
-    
+
     # 添加清除缓存按钮
     if st.sidebar.button("🔄 刷新数据"):
         st.cache_data.clear()
@@ -514,11 +455,9 @@ def render_sidebar():
 
     # 一级菜单：大盘速览
     with st.sidebar.expander("📊 大盘速览", expanded=False):
-        if st.button("📈 市场概览", key="nav_market_overview", use_container_width=True):
+        # 修改：市场概览改为指数复盘，删除指数行情
+        if st.button("📈 指数复盘", key="nav_market_overview", use_container_width=True):
             st.session_state.page = "market_overview"
-            st.session_state.show_icvr_submenu = False
-        if st.button("📊 指数行情", key="nav_index_quote", use_container_width=True):
-            st.session_state.page = "index_quote"
             st.session_state.show_icvr_submenu = False
 
     # 一级菜单：行业状态 - ICVR（默认折叠）
@@ -554,6 +493,7 @@ def render_sidebar():
             © 2026 工厂
         </div>
     """, unsafe_allow_html=True)
+
 
 def render_welcome():
     """初始欢迎界面 - 简化版"""
@@ -602,16 +542,299 @@ def render_welcome():
 
 
 def render_market_overview():
-    """大盘速览 - 市场概览（预留）"""
+    """大盘速览 - 市场概览"""
     st.markdown(f'<h1 class="main-title">📈 市场概览</h1>', unsafe_allow_html=True)
-    st.info("🚧 功能开发中，敬请期待...")
+
+    try:
+        # 只读取第2行作为列名
+        df = pd.read_excel(
+            st.session_state.data_paths['market_overview_file'],
+            sheet_name=st.session_state.data_paths['market_overview_sheet'],
+            header=1
+        )
+
+        # 获取数据日期
+        df_header = pd.read_excel(
+            st.session_state.data_paths['market_overview_file'],
+            sheet_name=st.session_state.data_paths['market_overview_sheet'],
+            header=None,
+            nrows=1
+        )
+
+        latest_date_str = "未知日期"
+        for val in df_header.iloc[0]:
+            if pd.notna(val) and isinstance(val, (str, pd.Timestamp)):
+                val_str = str(val)
+                if '2026' in val_str or '2025' in val_str:
+                    try:
+                        if isinstance(val, pd.Timestamp):
+                            latest_date_str = val.strftime("%Y年%m月%d日")
+                        else:
+                            date_obj = pd.to_datetime(val)
+                            latest_date_str = date_obj.strftime("%Y年%m月%d日")
+                    except:
+                        latest_date_str = val_str
+                    break
+
+        st.markdown(f'<p class="subtitle">数据截至 {latest_date_str}</p>', unsafe_allow_html=True)
+
+        # 自动识别列名
+        index_code_col = None
+        index_name_col = None
+        category_col = None
+
+        for col in df.columns:
+            col_str = str(col).strip()
+            if any(x in col_str for x in ['指数代码', '代码']):
+                index_code_col = col
+            if any(x in col_str for x in ['指数名称', '名称']):
+                index_name_col = col
+            if any(x in col_str for x in ['板块', '所属板块', '指数所属板块']):
+                category_col = col
+
+        if category_col is None and len(df.columns) >= 1:
+            category_col = df.columns[0]
+        if index_code_col is None and len(df.columns) >= 2:
+            index_code_col = df.columns[1]
+        if index_name_col is None and len(df.columns) >= 3:
+            index_name_col = df.columns[2]
+
+        change_col = [c for c in df.columns if '当日涨跌幅' in str(c)]
+        change_col = change_col[0] if change_col else None
+
+        # ========== 板块分类筛选器（默认显示全部）==========
+        if category_col and category_col in df.columns:
+            categories = df[category_col].dropna().unique().tolist()
+            st.markdown("### 🗂️ 板块筛选")
+
+            # 修改：默认不选择任何分类，显示全部
+            selected_categories = st.multiselect(
+                "选择板块分类（不选则显示全部）",
+                options=categories,
+                default=[],  # 默认空，显示全部
+                placeholder="请选择板块...",
+                key="category_filter"
+            )
+            if selected_categories:
+                df_filtered = df[df[category_col].isin(selected_categories)].copy()
+            else:
+                df_filtered = df.copy()
+        else:
+            df_filtered = df.copy()
+
+        # ========== 主要指数卡片 - 显示筛选板块中涨最多和跌最多的3个 ==========
+        st.markdown("---")
+
+        # 获取当日涨跌幅列
+        change_col = [c for c in df.columns if '当日涨跌幅' in str(c)]
+        change_col = change_col[0] if change_col else None
+
+        if change_col and index_name_col:
+            # 按涨跌幅排序
+            df_sorted = df_filtered.sort_values(by=change_col, ascending=False)
+
+            # 获取涨最多的3个和跌最多的3个
+            top3_up = df_sorted.head(3)  # 涨最多
+            top3_down = df_sorted.tail(3)  # 跌最多
+
+            # 合并并去重（防止数据少于6个时重复）
+            display_indices = pd.concat([top3_up, top3_down]).drop_duplicates(subset=[index_name_col])
+
+            # 显示为卡片
+            cols = st.columns(min(len(display_indices), 6))
+
+            for idx, (_, row) in enumerate(display_indices.iterrows()):
+                if idx >= 6:
+                    break
+
+                index_name = row[index_name_col]
+                change_val = row[change_col]
+
+                # 红涨绿跌
+                color = "🔴" if change_val > 0 else "🟢" if change_val < 0 else "⚪"
+
+                with cols[idx]:
+                    st.metric(
+                        label=f"{color} {index_name}",
+                        value=f"{change_val:+.2f}%"
+                    )
+        else:
+            # 如果无法获取涨跌幅列，显示默认的4个主要指数
+            main_indices = ['万得全A', '上证指数', '创业板指', '科创50']
+            cols = st.columns(4)
+            for idx, index_name in enumerate(main_indices):
+                row = df_filtered[df_filtered[index_name_col] == index_name]
+                if not row.empty and change_col:
+                    change_val = row[change_col].values[0]
+                    color = "🔴" if change_val > 0 else "🟢" if change_val < 0 else "⚪"
+                    with cols[idx]:
+                        st.metric(label=f"{color} {index_name}", value=f"{change_val:+.2f}%")
+
+        st.markdown("---")
+
+        # ========== 格式化数据表格 ==========
+        display_df = df_filtered.copy()
+
+        for col in display_df.columns:
+            col_str = str(col)
+            # 修改1：添加"近一周"、"近一月"关键词
+            if any(kw in col_str for kw in ['涨跌幅', '近5日', '近20日', '近一周', '近一月', '年初至今', '上年全年']):
+                display_df[col] = display_df[col].apply(lambda x: f"{x:+.2f}%" if pd.notna(x) else "-")
+            elif any(kw in col_str for kw in ['PE', 'PB', '股息率', '百分位数', '分位数']):
+                display_df[col] = display_df[col].apply(lambda x: f"{x:.2f}" if pd.notna(x) else "-")
+
+        # ========== 按分类分组显示表格 ==========
+        st.markdown("### 📊 指数行情数据")
+
+        # 隐藏分类列和代码列，只保留指数名称和数据列
+        exclude_cols = []
+        if category_col:
+            exclude_cols.append(category_col)
+        if index_code_col:
+            exclude_cols.append(index_code_col)
+
+        display_cols = [c for c in display_df.columns if c not in exclude_cols]
+        show_df = display_df[display_cols].copy()
+
+        # ========== 关键修改：计算每列的最大值用于相对条形图 ==========
+        # 获取原始数值（格式化前的）用于计算最大值
+        raw_df = df_filtered[[c for c in display_cols if c in df_filtered.columns]].copy()
+
+        # 计算每列的最大绝对值
+        col_max_values = {}
+        for col in raw_df.columns:
+            col_str = str(col)
+            # 修改2：添加"近一周"、"近一月"关键词
+            if any(kw in col_str for kw in ['涨跌幅', '近5日', '近20日', '近一周', '近一月', '年初至今', '上年全年']):
+                max_val = raw_df[col].abs().max()
+                col_max_values[col] = max_val if max_val > 0 else 1
+
+        # ========== 红涨绿跌 + 相对条形图 ==========
+        def colorize_value(val, col_name, is_percent=True):
+            """红涨绿跌 + 相对条形图"""
+            if not isinstance(val, str) or val == "-":
+                return val, 0
+            try:
+                num_str = val.replace('%', '').replace('+', '')
+                num = float(num_str)
+
+                if is_percent and col_name in col_max_values:
+                    # 使用当前筛选数据的最大值计算条形图宽度
+                    max_val = col_max_values[col_name]
+                    bar_width = min(abs(num) / max_val * 100, 100) if max_val > 0 else 0
+                    bar_color = "#ef4444" if num > 0 else "#10b981" if num < 0 else "#6b7280"
+
+                    # 创建条形图HTML
+                    bar_html = f'<div style="display:inline-flex;align-items:center;width:100%;"><div style="display:inline-block;width:50px;height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden;margin-right:6px;flex-shrink:0;"><div style="width:{bar_width}%;height:100%;background:{bar_color};"></div></div>'
+
+                    if num > 0:
+                        return f'{bar_html}<span style="color:#ef4444;font-weight:600;">{val}</span></div>', num
+                    elif num < 0:
+                        return f'{bar_html}<span style="color:#10b981;font-weight:600;">{val}</span></div>', num
+                    else:
+                        return f'{bar_html}<span style="color:#6b7280;">{val}</span></div>', num
+                else:
+                    return val, 0
+            except:
+                return val, 0
+
+        # 对百分比列应用颜色和条形图
+        styled_df = show_df.copy()
+        for col in styled_df.columns:
+            col_str = str(col)
+            # 修改3：添加"近一周"、"近一月"关键词
+            if any(kw in col_str for kw in ['涨跌幅', '近5日', '近20日', '近一周', '近一月', '年初至今', '上年全年']):
+                styled_df[col] = styled_df[col].apply(lambda x: colorize_value(x, col, True)[0])
+
+        # ========== 固定列宽（恢复原来的设置）==========
+        st.markdown("""
+        <style>
+        .market-table-container { overflow-x: auto; }
+        .market-table {
+            font-size: 13px;
+            border-collapse: collapse;
+            width: 100%;
+            table-layout: fixed;
+        }
+        .market-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 10px 6px;
+            text-align: center;
+            font-weight: 600;
+            border: none;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .market-table td {
+            padding: 8px 6px;
+            border-bottom: 1px solid #e5e7eb;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .market-table tr:nth-child(even) { background-color: #f9fafb; }
+        .market-table tr:hover { background-color: #f3f4f6; }
+        .market-table td:first-child {
+            font-weight: 600;
+            color: #374151;
+            text-align: left;
+        }
+        .market-table th:nth-child(1), .market-table td:nth-child(1) { width: 90px; }
+        .market-table th:nth-child(2), .market-table td:nth-child(2) { width: 130px; }
+        .market-table th:nth-child(3), .market-table td:nth-child(3) { width: 130px; }
+        .market-table th:nth-child(4), .market-table td:nth-child(4) { width: 100px; }
+        .market-table th:nth-child(5), .market-table td:nth-child(5) { width: 100px; }
+        .market-table th:nth-child(6), .market-table td:nth-child(6) { width: 100px; }
+        .market-table th:nth-child(7), .market-table td:nth-child(7) { width: 100px; }
+        .market-table th:nth-child(8), .market-table td:nth-child(8) { width: 80px; }
+        .market-table th:nth-child(9), .market-table td:nth-child(9) { width: 90px; }
+        .market-table th:nth-child(10), .market-table td:nth-child(10) { width: 80px; }
+        .market-table th:nth-child(11), .market-table td:nth-child(11) { width: 90px; }
+        .market-table th:nth-child(12), .market-table td:nth-child(12) { width: 70px; }
+        .market-table th:nth-child(13), .market-table td:nth-child(13) { width: 100px; }
+        </style>
+        """, unsafe_allow_html=True)
+
+        # ========== 按分类分组显示 ==========
+        if category_col and category_col in df_filtered.columns:
+            # 获取所有分类（保持原始顺序）
+            categories_in_data = df_filtered[category_col].dropna().unique().tolist()
+
+            for category in categories_in_data:
+                # 显示分类标题
+                st.markdown(f"""
+                <div style="margin-top: 24px; margin-bottom: 12px; padding: 8px 16px; 
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            color: white; border-radius: 8px; font-weight: 600; 
+                            display: inline-block; font-size: 14px;">
+                    {category}
+                </div>
+                """, unsafe_allow_html=True)
+
+                # 获取该分类的数据
+                category_df = styled_df[df_filtered[category_col] == category].copy()
+
+                # 生成该分类的表格
+                html_table = category_df.to_html(index=False, escape=False, classes='market-table')
+                st.markdown(f'<div class="market-table-container">{html_table}</div>', unsafe_allow_html=True)
+        else:
+            # 没有分类列，直接显示全部
+            html_table = styled_df.to_html(index=False, escape=False, classes='market-table')
+            st.markdown(f'<div class="market-table-container">{html_table}</div>', unsafe_allow_html=True)
+
+    except Exception as e:
+        st.error(f"市场概览数据加载失败: {e}")
+        import traceback
+        st.error(traceback.format_exc())
 
 
 def render_index_quote():
     """大盘速览 - 指数行情（预留）"""
     st.markdown(f'<h1 class="main-title">📊 指数行情</h1>', unsafe_allow_html=True)
     st.info("🚧 功能开发中，敬请期待...")
-
 
 def render_icvr_overview(df, latest_date_str):
     """ICVR - 一级行业概览"""
@@ -670,9 +893,26 @@ def render_icvr_overview(df, latest_date_str):
 
 
 def render_icvr_filter(df, latest_date_str):
-    """ICVR - 细分行业筛选"""
+    """ICVR - 细分行业筛选（新增股票搜索功能，选中后自动出图）"""
     st.markdown(f'<h1 class="main-title">🔍 ICVR 细分行业筛选</h1>', unsafe_allow_html=True)
     st.markdown(f'<p class="subtitle">数据截至 {latest_date_str}</p>', unsafe_allow_html=True)
+
+    # ========== 加载股票-行业映射数据 ==========
+    try:
+        stock_info_df = pd.read_excel(
+            st.session_state.data_paths['stock_info_file'],
+            sheet_name=st.session_state.data_paths['stock_info_sheet']
+        )
+        stock_to_industry = {}
+        for _, row in stock_info_df.iterrows():
+            code = str(row['证券代码']).strip()
+            name = str(row['证券简称']).strip()
+            industry = str(row['细分行业']).strip()
+            stock_to_industry[code] = industry
+            stock_to_industry[name] = industry
+    except Exception as e:
+        stock_info_df = None
+        stock_to_industry = {}
 
     col_info_all = identify_icvr_columns(df, category_filter="细分行业")
     industry_options = col_info_all["industry_names"]
@@ -684,21 +924,82 @@ def render_icvr_filter(df, latest_date_str):
     st.markdown(f"<p style='color:#6b7280;margin-bottom:16px;'>可选 <b>{len(industry_options)}</b> 个细分行业</p>",
                 unsafe_allow_html=True)
 
+    # ========== 初始化 session_state ==========
+    if "icvr_selected_industries" not in st.session_state:
+        st.session_state.icvr_selected_industries = []
+    if "last_stock_search" not in st.session_state:
+        st.session_state.last_stock_search = ""
+
+    # ========== 股票搜索功能（自动出图） ==========
+    if stock_info_df is not None and not stock_info_df.empty:
+        st.markdown("### 🔍 股票搜索（选中后自动显示图表）")
+
+        search_options = []
+        for _, row in stock_info_df.iterrows():
+            search_options.append(f"{row['证券代码']} {row['证券简称']}")
+
+        selected_stock = st.selectbox(
+            "输入股票代码或名称搜索",
+            options=[""] + search_options,
+            index=0,
+            key="stock_search",
+            help="选择股票后自动显示对应行业的ICVR图表"
+        )
+
+        # 检测股票选择变化
+        if selected_stock and selected_stock != st.session_state.last_stock_search:
+            stock_code = selected_stock.split(' ')[0]
+
+            # ========== 新增：检查是否找到对应的细分行业 ==========
+            if stock_code in stock_to_industry:
+                industry = stock_to_industry[stock_code]
+
+                # 检查该行业是否在ICVR数据可用的行业列表中
+                if industry in industry_options:
+                    if industry not in st.session_state.icvr_selected_industries:
+                        st.session_state.icvr_selected_industries.append(industry)
+                        st.success(f"✅ 股票 **{selected_stock}** 属于行业：**{industry}**，图表已自动生成")
+                        st.rerun()
+                else:
+                    # 找到行业但ICVR数据中没有该行业
+                    st.warning(f"⚠️ 股票 **{selected_stock}** 属于行业：**{industry}**，但该行业暂无ICVR数据")
+            else:
+                # 完全找不到对应的细分行业
+                st.error(f"❌ 未找到股票 **{selected_stock}** 对应的细分行业信息")
+
+            st.session_state.last_stock_search = selected_stock
+
+        st.markdown("---")
+
+    # ========== 行业多选筛选 ==========
+    st.markdown("### 📊 或直接选择细分行业")
+
+    def on_industry_change():
+        st.session_state.icvr_selected_industries = st.session_state.industry_select
+
     selected = st.multiselect(
         "选择要分析的细分行业（支持多选）",
         options=industry_options,
-        default=[],
-        placeholder="请选择行业..."
+        default=st.session_state.icvr_selected_industries,
+        placeholder="请选择行业...",
+        key="industry_select",
+        on_change=on_industry_change
     )
 
-    if not selected:
+    st.session_state.icvr_selected_industries = selected
+    all_selected = st.session_state.icvr_selected_industries
+
+    if not all_selected:
         st.markdown("""
             <div class="info-box">
                 <div style='font-size:2rem;margin-bottom:12px;'>👆</div>
-                <p style='color:#6b7280;'>请从上方选择至少一个细分行业进行分析</p>
+                <p style='color:#6b7280;'>请搜索股票或选择行业进行分析</p>
+                <p style='color:#9ca3af;font-size:0.9rem;margin-top:8px;'>支持：股票搜索自动出图 或 手动选择行业</p>
             </div>
         """, unsafe_allow_html=True)
         return
+
+    # ... 后续图表显示代码保持不变
 
     st.markdown("""
         <div class="legend-box">
@@ -711,28 +1012,28 @@ def render_icvr_filter(df, latest_date_str):
         </div>
     """, unsafe_allow_html=True)
 
-    with st.spinner(f"正在计算 {len(selected)} 个行业的 ICVR 指标..."):
+    with st.spinner(f"正在计算 {len(all_selected)} 个行业的 ICVR 指标..."):
         col_info = {
-            "industry_names": selected,
+            "industry_names": all_selected,
             "Ashare_amt_col": col_info_all["Ashare_amt_col"],
             "Ashare_ret_col": col_info_all["Ashare_ret_col"],
-            "amt_dict": {k: v for k, v in col_info_all["amt_dict"].items() if k in selected},
-            "ret_dict": {k: v for k, v in col_info_all["ret_dict"].items() if k in selected},
-            "vol_dict": {k: v for k, v in col_info_all["vol_dict"].items() if k in selected},
+            "amt_dict": {k: v for k, v in col_info_all["amt_dict"].items() if k in all_selected},
+            "ret_dict": {k: v for k, v in col_info_all["ret_dict"].items() if k in all_selected},
+            "vol_dict": {k: v for k, v in col_info_all["vol_dict"].items() if k in all_selected},
         }
 
         try:
             c15, r15, v20 = calculate_icvr_indicators(df, col_info, 15, 15)
-            data_15 = standardize_icvr_data(c15, v20, r15, selected, 15, 15)
+            data_15 = standardize_icvr_data(c15, v20, r15, all_selected, 15, 15)
 
             c20, r55, v20 = calculate_icvr_indicators(df, col_info, 20, 55)
-            data_20 = standardize_icvr_data(c20, v20, r55, selected, 20, 55)
+            data_20 = standardize_icvr_data(c20, v20, r55, all_selected, 20, 55)
 
         except Exception as e:
             st.error(f"计算出错: {e}")
             return
 
-    for name in selected:
+    for name in all_selected:
         if name not in data_15 or name not in data_20:
             st.warning(f"{name}: 数据不足，无法计算")
             continue
@@ -760,6 +1061,7 @@ def render_earning_revision():
     """发现牛牛 - 业绩上修（Earning Revision）"""
     st.markdown(f'<h1 class="main-title">🐮 业绩上修</h1>', unsafe_allow_html=True)
 
+    from datetime import datetime
     today_str = datetime.now().strftime("%Y年%m月%d日")
     st.markdown(f'<p class="subtitle">数据截至 {today_str}</p>', unsafe_allow_html=True)
 
@@ -993,7 +1295,11 @@ def main():
         'icvr_file': "data.xlsx",
         'icvr_sheet': "data",
         'earning_file': "search.xlsx",
-        'earning_sheet': "search"
+        'earning_sheet': "search",
+        'market_overview_file': "data.xlsx",
+        'market_overview_sheet': "ov",
+        'stock_info_file': "data.xlsx",
+        'stock_info_sheet': "info"
     }
 
     st.session_state.data_paths = DATA_CONFIG
