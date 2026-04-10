@@ -515,7 +515,10 @@ def render_welcome():
                 <div class="menu-title">大盘速览</div>
             </div>
         """, unsafe_allow_html=True)
-        st.button("即将上线", disabled=True, key="welcome_market", use_container_width=True)
+        # 修改：大盘速览功能已上线
+        if st.button("进入", key="welcome_market", use_container_width=True):
+            st.session_state.page = "market_overview"
+            st.rerun()
 
     with col2:
         st.markdown("""
