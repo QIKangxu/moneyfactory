@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from sklearn.preprocessing import MinMaxScaler
 import os
 
-st.sidebar.markdown("### 🔥 版本: 4月10日")
+
 # =============================
 # 页面配置（必须放最前面）
 # =============================
@@ -15,7 +15,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
+st.sidebar.markdown("### 🔥 版本: 4月10日")
 # =============================
 # 自定义CSS样式
 # =============================
