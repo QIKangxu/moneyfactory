@@ -1604,10 +1604,10 @@ def validate_data_paths(config):
 
 def main():
     DATA_CONFIG = {
-        'icvr_file': "source/data.csv",
-        'earning_file': "source/search.csv",
-        'market_overview_file': "source/ov.csv",
-        'stock_info_file': "source/info.csv"
+        'icvr_file': "data.csv",
+        'earning_file': "search.csv",
+        'market_overview_file': "ov.csv",
+        'stock_info_file': "info.csv"
     }
 
     st.session_state.data_paths = DATA_CONFIG
