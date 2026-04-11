@@ -1597,12 +1597,48 @@ def validate_data_paths(config):
         return False
     return True
 
-
 # =============================
 # 主程序入口
 # =============================
 
 def main():
+    import urllib.request
+    import zipfile
+    
+    # GitHub 上的 source.zip 直链（已修正为 raw 格式）
+    SOURCE_ZIP_URL = "https://github.com/QIKangxu/moneyfactory/raw/main/source.zip"
+    
+    def download_and_extract_source(zip_url, extract_to="."):
+        """自动下载并解压 source.zip"""
+        zip_path = "source.zip"
+        
+        # 如果 source 文件夹已存在且包含所有必要文件，跳过下载
+        required_files = ["source/data.csv", "source/search.csv", "source/ov.csv", "source/info.csv"]
+        if all(os.path.exists(f) for f in required_files):
+            return
+        
+        with st.spinner("首次运行，正在下载数据文件..."):
+            try:
+                # 下载
+                urllib.request.urlretrieve(zip_url, zip_path)
+                
+                # 解压
+                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                    zip_ref.extractall(extract_to)
+                
+                # 删除zip文件节省空间
+                os.remove(zip_path)
+                
+                st.success("✅ 数据下载完成！")
+            except Exception as e:
+                st.error(f"下载数据失败: {e}")
+                st.info("请检查 GitHub URL 是否正确，或手动放置数据文件到 source/ 文件夹")
+                raise e
+    
+    # 自动下载解压
+    download_and_extract_source(SOURCE_ZIP_URL)
+    
+    # 原有配置保持不变
     DATA_CONFIG = {
         'icvr_file': "source/data.csv",
         'earning_file': "source/search.csv",
