@@ -896,26 +896,53 @@ def render_icvr_overview(df, latest_date_str):
 
 
 def render_icvr_filter(df, latest_date_str):
-    """ICVR - 细分行业筛选（新增股票搜索功能，选中后自动出图）"""
+    """ICVR - 细分行业筛选（四种筛选方式：股票、一级行业、细分行业、历史分位数）"""
     st.markdown(f'<h1 class="main-title">🔍 ICVR 细分行业筛选</h1>', unsafe_allow_html=True)
     st.markdown(f'<p class="subtitle">数据截至 {latest_date_str}</p>', unsafe_allow_html=True)
 
-    # ========== 加载股票-行业映射数据 ==========
+    # ========== 加载数据（分别处理股票映射和一级行业映射）==========
     try:
         stock_info_df = pd.read_excel(
             st.session_state.data_paths['stock_info_file'],
             sheet_name=st.session_state.data_paths['stock_info_sheet']
         )
+
+        # 1. 股票筛选映射：A列(代码) -> C列(细分行业)
         stock_to_industry = {}
         for _, row in stock_info_df.iterrows():
-            code = str(row['证券代码']).strip()
-            name = str(row['证券简称']).strip()
-            industry = str(row['细分行业']).strip()
-            stock_to_industry[code] = industry
-            stock_to_industry[name] = industry
+            code = str(row.iloc[0]).strip() if pd.notna(row.iloc[0]) else ""  # A列：证券代码
+            name = str(row.iloc[1]).strip() if pd.notna(row.iloc[1]) else ""  # B列：证券简称
+            sub_industry = str(row.iloc[2]).strip() if pd.notna(row.iloc[2]) else ""  # C列：细分行业
+
+            if code and sub_industry and sub_industry.lower() not in ['nan', 'none']:
+                stock_to_industry[code] = sub_industry
+            if name and sub_industry and sub_industry.lower() not in ['nan', 'none']:
+                stock_to_industry[name] = sub_industry
+
+        # 2. 一级行业筛选映射：E列(一级行业) -> F列(细分行业)
+        primary_to_sub = {}
+        for _, row in stock_info_df.iterrows():
+            primary_industry = str(row.iloc[4]).strip() if pd.notna(row.iloc[4]) else ""  # E列：一级行业
+            sub_industry = str(row.iloc[5]).strip() if pd.notna(row.iloc[5]) else ""  # F列：细分行业
+
+            if (
+                primary_industry and sub_industry
+                and primary_industry.lower() not in ['nan', 'none']
+                and sub_industry.lower() not in ['nan', 'none']
+            ):
+                if primary_industry not in primary_to_sub:
+                    primary_to_sub[primary_industry] = set()
+                primary_to_sub[primary_industry].add(sub_industry)
+
+        # 转换为排序列表
+        for key in primary_to_sub:
+            primary_to_sub[key] = sorted(list(primary_to_sub[key]))
+
     except Exception as e:
         stock_info_df = None
         stock_to_industry = {}
+        primary_to_sub = {}
+        st.error(f"加载行业映射数据失败: {e}")
 
     col_info_all = identify_icvr_columns(df, category_filter="细分行业")
     industry_options = col_info_all["industry_names"]
@@ -924,86 +951,280 @@ def render_icvr_filter(df, latest_date_str):
         st.error("未找到细分行业数据，请检查数据源")
         return
 
-    st.markdown(f"<p style='color:#6b7280;margin-bottom:16px;'>可选 <b>{len(industry_options)}</b> 个细分行业</p>",
-                unsafe_allow_html=True)
+    st.markdown(
+        f"<p style='color:#6b7280;margin-bottom:16px;'>系统共有 <b>{len(industry_options)}</b> 个细分行业</p>",
+        unsafe_allow_html=True
+    )
 
     # ========== 初始化 session_state ==========
-    if "icvr_selected_industries" not in st.session_state:
-        st.session_state.icvr_selected_industries = []
-    if "last_stock_search" not in st.session_state:
-        st.session_state.last_stock_search = ""
+    if "filter_mode" not in st.session_state:
+        st.session_state.filter_mode = None
+    if "selected_industries" not in st.session_state:
+        st.session_state.selected_industries = []
+    if "show_percentile_filter" not in st.session_state:
+        st.session_state.show_percentile_filter = False
+    if "applied_percentile_count" not in st.session_state:
+        st.session_state.applied_percentile_count = 0
 
-    # ========== 股票搜索功能（自动出图） ==========
+    # 分位数筛选默认值
+    if "pct_crowd_range" not in st.session_state:
+        st.session_state.pct_crowd_range = (0, 100)
+    if "pct_ret_range" not in st.session_state:
+        st.session_state.pct_ret_range = (0, 100)
+    if "pct_vol_range" not in st.session_state:
+        st.session_state.pct_vol_range = (0, 100)
+
+    # ========== 1. 股票搜索（A-C列，最上面）==========
+    st.markdown("### 🔍 股票搜索")
+
     if stock_info_df is not None and not stock_info_df.empty:
-        st.markdown("### 🔍 股票搜索（选中后自动显示图表）")
-
         search_options = []
         for _, row in stock_info_df.iterrows():
-            search_options.append(f"{row['证券代码']} {row['证券简称']}")
+            code = str(row.iloc[0]).strip() if pd.notna(row.iloc[0]) else ""  # A列
+            name = str(row.iloc[1]).strip() if pd.notna(row.iloc[1]) else ""  # B列
+            if code and name:
+                search_options.append(f"{code} {name}")
 
         selected_stock = st.selectbox(
-            "输入股票代码或名称搜索",
-            options=[""] + search_options,
+            "输入股票代码或名称搜索（选中后自动显示该股票所属行业）",
+            options=[""] + sorted(list(set(search_options))),
             index=0,
-            key="stock_search",
-            help="选择股票后自动显示对应行业的ICVR图表"
+            key="stock_search"
         )
 
-        # 检测股票选择变化
-        if selected_stock and selected_stock != st.session_state.last_stock_search:
+        if selected_stock:
             stock_code = selected_stock.split(' ')[0]
-
-            # ========== 新增：检查是否找到对应的细分行业 ==========
             if stock_code in stock_to_industry:
-                industry = stock_to_industry[stock_code]
-
-                # 检查该行业是否在ICVR数据可用的行业列表中
+                industry = stock_to_industry[stock_code]  # 来自C列
                 if industry in industry_options:
-                    if industry not in st.session_state.icvr_selected_industries:
-                        st.session_state.icvr_selected_industries.append(industry)
-                        st.success(f"✅ 股票 **{selected_stock}** 属于行业：**{industry}**，图表已自动生成")
+                    st.session_state.filter_mode = "stock"
+                    st.session_state.selected_industries = [industry]
+                    st.success(f"✅ 股票 **{selected_stock}** 所属行业：**{industry}**")
+                else:
+                    st.warning(f"⚠️ 该股票所属行业 **{industry}** 暂无ICVR数据")
+            else:
+                st.error("❌ 未找到股票对应的行业信息")
+
+    st.markdown("---")
+
+    # ========== 2. 一级行业筛选（E-F列）==========
+    st.markdown("### 🏭 一级行业筛选")
+
+    if primary_to_sub:
+        primary_list = sorted(list(primary_to_sub.keys()))
+        primary_options = ["请选择一级行业..."] + primary_list
+
+        selected_primary = st.selectbox(
+            "选择一级行业（选中后自动显示该行业下所有细分行业）",
+            options=primary_options,
+            index=0,
+            key="primary_industry_select"
+        )
+
+        if selected_primary != "请选择一级行业...":
+            sub_under_primary = set(primary_to_sub[selected_primary])  # 来自F列
+            matched_industries = [ind for ind in industry_options if ind in sub_under_primary]
+
+            if len(matched_industries) == 0:
+                st.warning(f"⚠️ **{selected_primary}** 下的细分行业暂无ICVR数据")
+                st.session_state.selected_industries = []
+            else:
+                st.session_state.filter_mode = "primary"
+                st.session_state.selected_industries = matched_industries
+                st.success(f"✅ **{selected_primary}** 下共找到 **{len(matched_industries)}** 个细分行业有ICVR数据")
+
+                with st.expander(f"查看 {selected_primary} 下的 {len(matched_industries)} 个细分行业"):
+                    st.write(matched_industries)
+        else:
+            if st.session_state.filter_mode == "primary":
+                st.session_state.filter_mode = None
+                st.session_state.selected_industries = []
+
+    st.markdown("---")
+
+    # ========== 3. 细分行业多选 ==========
+    st.markdown("### 📊 细分行业筛选")
+
+    manual_selected = st.multiselect(
+        "直接选择细分行业（支持多选，选择后覆盖上方筛选）",
+        options=industry_options,
+        default=[] if st.session_state.filter_mode != "manual" else st.session_state.selected_industries,
+        placeholder="请选择细分行业...",
+        key="manual_industry_select"
+    )
+
+    if manual_selected:
+        st.session_state.filter_mode = "manual"
+        st.session_state.selected_industries = manual_selected
+        st.session_state.show_percentile_filter = False
+
+    st.markdown("---")
+
+    # ========== 4. 历史分位数筛选 ==========
+    st.markdown("### 📈 历史分位数筛选")
+
+    show_percentile = st.checkbox(
+        "启用历史分位数筛选（基于最新日期的拥挤度、超额收益、波动率历史分位数）",
+        value=st.session_state.show_percentile_filter,
+        key="show_percentile_checkbox"
+    )
+    st.session_state.show_percentile_filter = show_percentile
+
+    if st.session_state.filter_mode == "percentile" and not show_percentile:
+        st.session_state.show_percentile_filter = True
+        show_percentile = True
+        st.rerun()
+
+    if show_percentile:
+        @st.cache_data(ttl=3600)
+        def calculate_latest_percentiles_cached(df_cached, col_info_cached):
+            return calculate_latest_percentiles(df_cached, col_info_cached)
+
+        def apply_quick_filter(crowd_range, ret_range, vol_range):
+            st.session_state.pct_crowd_range = crowd_range
+            st.session_state.pct_ret_range = ret_range
+            st.session_state.pct_vol_range = vol_range
+            st.session_state.show_percentile_filter = True
+
+        try:
+            with st.spinner("正在计算历史分位数..."):
+                percentile_df = calculate_latest_percentiles_cached(df, col_info_all)
+        except Exception as e:
+            st.error(f"分位数计算失败: {e}")
+            percentile_df = pd.DataFrame()
+
+        if not percentile_df.empty:
+            st.caption("设置各指标的历史分位数范围（0-100），筛选出符合条件的细分行业")
+
+            # ========== 快捷筛选按钮 ==========
+            st.markdown("#### 🚀 快捷筛选")
+            quick_col1, quick_col2, quick_col3, quick_col4 = st.columns(4)
+
+            with quick_col1:
+                if st.button("📉 低超额（<5%）", use_container_width=True, key="btn_low_ret"):
+                    apply_quick_filter((0, 100), (0, 5), (0, 100))
+                    st.rerun()
+
+            with quick_col2:
+                if st.button("📉 低拥挤+低超额（<5%）", use_container_width=True, key="btn_low_all"):
+                    apply_quick_filter((0, 5), (0, 5), (0, 5))
+                    st.rerun()
+
+            with quick_col3:
+                if st.button("📈 高超额（>90%）", use_container_width=True, key="btn_high_ret"):
+                    apply_quick_filter((0, 100), (90, 100), (0, 100))
+                    st.rerun()
+
+            with quick_col4:
+                if st.button("🔥 高拥挤+高超额（>90%）", use_container_width=True, key="btn_high_all"):
+                    apply_quick_filter((90, 100), (90, 100), (90, 100))
+                    st.rerun()
+
+            # ========== 三个 slider ==========
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.markdown("**拥挤度分位数**")
+                st.slider(
+                    "范围",
+                    min_value=0,
+                    max_value=100,
+                    key="pct_crowd_range"
+                )
+
+            with col2:
+                st.markdown("**超额收益分位数**")
+                st.slider(
+                    "范围",
+                    min_value=0,
+                    max_value=100,
+                    key="pct_ret_range"
+                )
+
+            with col3:
+                st.markdown("**波动率分位数**")
+                st.slider(
+                    "范围",
+                    min_value=0,
+                    max_value=100,
+                    key="pct_vol_range"
+                )
+
+            # ========== 应用分位数筛选 ==========
+            filtered_percentile = percentile_df[
+                (percentile_df['拥挤度分位数'] >= st.session_state.pct_crowd_range[0]) &
+                (percentile_df['拥挤度分位数'] <= st.session_state.pct_crowd_range[1]) &
+                (percentile_df['超额收益分位数'] >= st.session_state.pct_ret_range[0]) &
+                (percentile_df['超额收益分位数'] <= st.session_state.pct_ret_range[1]) &
+                (percentile_df['波动率分位数'] >= st.session_state.pct_vol_range[0]) &
+                (percentile_df['波动率分位数'] <= st.session_state.pct_vol_range[1])
+            ]
+
+            st.markdown(f"**分位数筛选结果：共 {len(filtered_percentile)} 个行业**")
+
+            if len(filtered_percentile) > 0:
+                display_pct_df = filtered_percentile[
+                    ['细分行业', '拥挤度分位数', '超额收益分位数', '波动率分位数']
+                ].copy()
+                display_pct_df['拥挤度分位数'] = display_pct_df['拥挤度分位数'].apply(lambda x: f"{x:.1f}%")
+                display_pct_df['超额收益分位数'] = display_pct_df['超额收益分位数'].apply(lambda x: f"{x:.1f}%")
+                display_pct_df['波动率分位数'] = display_pct_df['波动率分位数'].apply(lambda x: f"{x:.1f}%")
+                st.dataframe(display_pct_df, use_container_width=True, hide_index=True)
+
+            st.caption(
+                f"当前筛选范围 | "
+                f"拥挤度: {st.session_state.pct_crowd_range[0]}-{st.session_state.pct_crowd_range[1]}% | "
+                f"超额收益: {st.session_state.pct_ret_range[0]}-{st.session_state.pct_ret_range[1]}% | "
+                f"波动率: {st.session_state.pct_vol_range[0]}-{st.session_state.pct_vol_range[1]}%"
+            )
+
+            if len(filtered_percentile) > 0:
+                current_count = len(filtered_percentile)
+                is_already_applied = (
+                    st.session_state.filter_mode == "percentile"
+                    and st.session_state.applied_percentile_count == current_count
+                    and len(st.session_state.selected_industries) == current_count
+                )
+
+                if not is_already_applied:
+                    if st.button("✅ 应用分位数筛选结果（覆盖上方选择）", type="primary", key="apply_percentile"):
+                        st.session_state.filter_mode = "percentile"
+                        st.session_state.selected_industries = filtered_percentile['细分行业'].tolist()
+                        st.session_state.show_percentile_filter = True
+                        st.session_state.applied_percentile_count = len(filtered_percentile)
                         st.rerun()
                 else:
-                    # 找到行业但ICVR数据中没有该行业
-                    st.warning(f"⚠️ 股票 **{selected_stock}** 属于行业：**{industry}**，但该行业暂无ICVR数据")
+                    st.success(f"✅ 已应用分位数筛选结果：共 {current_count} 个行业")
             else:
-                # 完全找不到对应的细分行业
-                st.error(f"❌ 未找到股票 **{selected_stock}** 对应的细分行业信息")
-
-            st.session_state.last_stock_search = selected_stock
+                st.warning("⚠️ 没有符合分位数条件的行业，无法应用筛选")
 
         st.markdown("---")
 
-    # ========== 行业多选筛选 ==========
-    st.markdown("### 📊 或直接选择细分行业")
-
-    def on_industry_change():
-        st.session_state.icvr_selected_industries = st.session_state.industry_select
-
-    selected = st.multiselect(
-        "选择要分析的细分行业（支持多选）",
-        options=industry_options,
-        default=st.session_state.icvr_selected_industries,
-        placeholder="请选择行业...",
-        key="industry_select",
-        on_change=on_industry_change
-    )
-
-    st.session_state.icvr_selected_industries = selected
-    all_selected = st.session_state.icvr_selected_industries
+    # ========== 显示图表 ==========
+    all_selected = st.session_state.selected_industries
 
     if not all_selected:
         st.markdown("""
             <div class="info-box">
                 <div style='font-size:2rem;margin-bottom:12px;'>👆</div>
-                <p style='color:#6b7280;'>请搜索股票或选择行业进行分析</p>
-                <p style='color:#9ca3af;font-size:0.9rem;margin-top:8px;'>支持：股票搜索自动出图 或 手动选择行业</p>
+                <p style='color:#6b7280;'>请通过以下任一方式筛选：</p>
+                <p style='color:#9ca3af;font-size:0.9rem;margin-top:8px;'>
+                    1. 股票搜索 | 2. 一级行业筛选 | 3. 细分行业多选 | 4. 历史分位数筛选
+                </p>
             </div>
         """, unsafe_allow_html=True)
         return
 
-    # ... 后续图表显示代码保持不变
+    if st.session_state.filter_mode == "stock":
+        st.caption(f"当前模式：股票搜索(A-C列) | 显示行业：{', '.join(all_selected)}")
+    elif st.session_state.filter_mode == "primary":
+        st.caption(f"当前模式：一级行业筛选(E-F列) | 共 {len(all_selected)} 个细分行业")
+    elif st.session_state.filter_mode == "manual":
+        st.caption(f"当前模式：手动选择 | 共 {len(all_selected)} 个细分行业")
+    elif st.session_state.filter_mode == "percentile":
+        st.caption(f"当前模式：历史分位数筛选 | 共 {len(all_selected)} 个细分行业")
 
+    # 图表渲染
     st.markdown("""
         <div class="legend-box">
             <span style='font-weight:600;color:#374151;'>ICVR 图例：</span>
@@ -1059,6 +1280,101 @@ def render_icvr_filter(df, latest_date_str):
 
         st.markdown("<hr>", unsafe_allow_html=True)
 
+# ========== 辅助函数：计算历史分位数 ==========
+def calculate_latest_percentiles(df, col_info_all, window_crowd=20, window_ret=55):
+    """计算最新日期的ICVR指标历史分位数"""
+    industry_names = col_info_all["industry_names"]
+    Ashare_amt_col = col_info_all["Ashare_amt_col"]
+    Ashare_ret_col = col_info_all["Ashare_ret_col"]
+    amt_dict = col_info_all["amt_dict"]
+    ret_dict = col_info_all["ret_dict"]
+    vol_dict = col_info_all["vol_dict"]
+
+    if Ashare_amt_col is None or Ashare_amt_col not in df.columns:
+        raise ValueError(f"万得全A成交额列未找到")
+    if Ashare_ret_col is None or Ashare_ret_col not in df.columns:
+        raise ValueError(f"万得全A收益率列未找到")
+
+    # 计算拥挤度
+    Ashare_rolling = df[Ashare_amt_col].rolling(window_crowd).sum()
+    crowding = pd.DataFrame(index=df.index[window_crowd - 1:])
+
+    for name in industry_names:
+        amt_col = amt_dict.get(name)
+        if amt_col and amt_col in df.columns:
+            crowding[name] = df[amt_col].rolling(window_crowd).sum() / Ashare_rolling
+        else:
+            crowding[name] = np.nan
+
+    # 计算超额收益
+    relative_returns = pd.DataFrame(index=df.index)
+    for name in industry_names:
+        ret_col = ret_dict.get(name)
+        if ret_col and ret_col in df.columns:
+            relative_returns[name] = df[ret_col] - df[Ashare_ret_col]
+        else:
+            relative_returns[name] = np.nan
+    relative_returns_sum = relative_returns.rolling(window_ret).sum()
+
+    # 计算波动率
+    volatility = pd.DataFrame(index=crowding.index)
+    for name in industry_names:
+        vol_col = vol_dict.get(name)
+        if vol_col and vol_col in df.columns:
+            volatility[name] = df[vol_col].iloc[window_crowd - 1:]
+        else:
+            volatility[name] = np.nan
+
+    # 获取最新日期
+    latest_date = crowding.index[-1]
+
+    # 计算每个行业的历史分位数
+    percentile_data = []
+
+    for name in industry_names:
+        # 跳过数据不足的行业
+        if name not in crowding.columns or name not in relative_returns_sum.columns or name not in volatility.columns:
+            continue
+
+        # 拥挤度历史分位数
+        crowd_series = crowding[name].dropna()
+        if len(crowd_series) > 0:
+            latest_crowd = crowd_series.iloc[-1]
+            crowd_pct = (crowd_series <= latest_crowd).mean() * 100
+        else:
+            latest_crowd = np.nan
+            crowd_pct = np.nan
+
+        # 超额收益历史分位数
+        ret_series = relative_returns_sum[name].dropna()
+        if len(ret_series) > 0:
+            latest_ret = ret_series.iloc[-1]
+            ret_pct = (ret_series <= latest_ret).mean() * 100
+        else:
+            latest_ret = np.nan
+            ret_pct = np.nan
+
+        # 波动率历史分位数
+        vol_series = volatility[name].dropna()
+        if len(vol_series) > 0:
+            latest_vol = vol_series.iloc[-1]
+            vol_pct = (vol_series <= latest_vol).mean() * 100
+        else:
+            latest_vol = np.nan
+            vol_pct = np.nan
+
+        percentile_data.append({
+            '细分行业': name,
+            '最新日期': latest_date.strftime('%Y-%m-%d'),
+            '拥挤度': latest_crowd,
+            '拥挤度分位数': crowd_pct,
+            '超额收益': latest_ret,
+            '超额收益分位数': ret_pct,
+            '波动率': latest_vol,
+            '波动率分位数': vol_pct
+        })
+
+    return pd.DataFrame(percentile_data)
 
 def render_earning_revision():
     """发现牛牛 - 业绩上修（Earning Revision）"""
