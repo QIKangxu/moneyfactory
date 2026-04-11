@@ -1604,71 +1604,37 @@ def validate_data_paths(config):
 def main():
     import urllib.request
     import zipfile
-    import socket
     
     # GitHub 上的 source.zip 直链
     SOURCE_ZIP_URL = "https://github.com/QIKangxu/moneyfactory/raw/main/source.zip"
     
-    def download_and_extract_source(zip_url, extract_to="."):
-        """自动下载并解压 source.zip"""
+    # 检查本地是否已有数据
+    required_files = ["source/data.csv", "source/search.csv", "source/ov.csv", "source/info.csv"]
+    has_local_data = all(os.path.exists(f) for f in required_files)
+    
+    if not has_local_data:
         zip_path = "source.zip"
         
-        # 如果 source 文件夹已存在且包含所有必要文件，跳过下载
-        required_files = ["source/data.csv", "source/search.csv", "source/ov.csv", "source/info.csv"]
-        if all(os.path.exists(f) for f in required_files):
-            return
-        
-        with st.spinner("首次运行，正在下载数据文件（约50MB，可能需要1-2分钟）..."):
+        with st.spinner("首次运行，正在下载数据文件..."):
             try:
-                # 设置超时时间为 5 分钟
-                socket.setdefaulttimeout(300)
-                
-                # 添加请求头，模拟浏览器
-                headers = {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                }
-                
-                req = urllib.request.Request(zip_url, headers=headers)
-                
-                # 下载并显示进度
-                def download_progress(block_num, block_size, total_size):
-                    downloaded = block_num * block_size
-                    percent = min(downloaded / total_size * 100, 100)
-                    if block_num % 10 == 0:  # 每10个块更新一次
-                        st.write(f"下载进度: {percent:.1f}%")
-                
-                urllib.request.urlretrieve(req, zip_path, reporthook=download_progress)
-                
-                st.write("下载完成，正在解压...")
+                # 简单下载，不显示进度
+                urllib.request.urlretrieve(SOURCE_ZIP_URL, zip_path)
                 
                 # 解压
                 with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                    zip_ref.extractall(extract_to)
+                    zip_ref.extractall(".")
                 
-                # 删除zip文件节省空间
+                # 删除zip
                 os.remove(zip_path)
                 
                 st.success("✅ 数据下载完成！")
                 
             except Exception as e:
-                st.error(f"下载数据失败: {e}")
-                st.info("请检查网络连接，或手动将数据文件放到 source/ 文件夹")
-                # 如果下载失败，尝试继续运行（可能本地已有数据）
-                if not all(os.path.exists(f) for f in required_files):
-                    raise e
+                st.error(f"下载失败: {e}")
+                st.info("请手动下载并解压到 source/ 文件夹")
+                return
     
-    # 自动下载解压（如果失败会报错）
-    try:
-        download_and_extract_source(SOURCE_ZIP_URL)
-    except Exception as e:
-        st.warning("自动下载失败，请检查网络或手动放置数据文件")
-        # 检查本地是否已有数据
-        required_files = ["source/data.csv", "source/search.csv", "source/ov.csv", "source/info.csv"]
-        if not all(os.path.exists(f) for f in required_files):
-            st.error("本地也没有数据文件，程序无法运行")
-            return
-    
-    # 原有配置保持不变
+    # 数据配置
     DATA_CONFIG = {
         'icvr_file': "source/data.csv",
         'earning_file': "source/search.csv",
@@ -1702,6 +1668,9 @@ def main():
             st.error(f"ICVR 数据加载失败: {e}")
             import traceback
             st.error(traceback.format_exc())
+
+    elif current_page == "index_quote":
+        render_index_quote()
 
     elif current_page == "icvr_filter":
         try:
