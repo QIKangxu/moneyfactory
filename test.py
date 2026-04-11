@@ -1597,44 +1597,12 @@ def validate_data_paths(config):
         return False
     return True
 
+
 # =============================
 # 主程序入口
 # =============================
 
 def main():
-    import urllib.request
-    import zipfile
-    
-    # GitHub 上的 source.zip 直链
-    SOURCE_ZIP_URL = "https://github.com/QIKangxu/moneyfactory/raw/main/source.zip"
-    
-    # 检查本地是否已有数据
-    required_files = ["source/data.csv", "source/search.csv", "source/ov.csv", "source/info.csv"]
-    has_local_data = all(os.path.exists(f) for f in required_files)
-    
-    if not has_local_data:
-        zip_path = "source.zip"
-        
-        with st.spinner("首次运行，正在下载数据文件..."):
-            try:
-                # 简单下载，不显示进度
-                urllib.request.urlretrieve(SOURCE_ZIP_URL, zip_path)
-                
-                # 解压
-                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                    zip_ref.extractall(".")
-                
-                # 删除zip
-                os.remove(zip_path)
-                
-                st.success("✅ 数据下载完成！")
-                
-            except Exception as e:
-                st.error(f"下载失败: {e}")
-                st.info("请手动下载并解压到 source/ 文件夹")
-                return
-    
-    # 数据配置
     DATA_CONFIG = {
         'icvr_file': "source/data.csv",
         'earning_file': "source/search.csv",
@@ -1668,9 +1636,6 @@ def main():
             st.error(f"ICVR 数据加载失败: {e}")
             import traceback
             st.error(traceback.format_exc())
-
-    elif current_page == "index_quote":
-        render_index_quote()
 
     elif current_page == "icvr_filter":
         try:
